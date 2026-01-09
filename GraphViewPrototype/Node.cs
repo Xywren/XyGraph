@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -23,8 +24,6 @@ namespace GraphViewPrototype
 
         public Node()
         {
-            //MinWidth = MIN_NODE_WIDTH;
-            //MinHeight = MIN_NODE_HEIGHT;
             Background = Brushes.DarkGray;
             CornerRadius = new CornerRadius(CORNER_RADIUS);
             grid = CreateContent();
@@ -55,7 +54,7 @@ namespace GraphViewPrototype
             TitleContainer.CornerRadius = new CornerRadius(CORNER_RADIUS, CORNER_RADIUS, 0, 0);
 
             // Top container
-            TopContainer = new NodeContainer(this, Brushes.LightGray);
+            TopContainer = new NodeContainer(this, Brushes.DimGray);
             Grid.SetRow(TopContainer, 1);
             Grid.SetColumn(TopContainer, 0);
             Grid.SetColumnSpan(TopContainer, 3);
@@ -67,7 +66,7 @@ namespace GraphViewPrototype
             Grid.SetColumn(InputContainer, 0);
             grid.Children.Add(InputContainer);
 
-            MainContainer = new NodeContainer(this, Brushes.LightBlue);
+            MainContainer = new NodeContainer(this, Brushes.DarkGray);
             Grid.SetRow(MainContainer, 2);
             Grid.SetColumn(MainContainer, 1);
             grid.Children.Add(MainContainer);
@@ -96,16 +95,23 @@ namespace GraphViewPrototype
                 foreach (Port p in Ports)
                 {
                     if (p.Type == NodeType.Output)
+                    {
                         p.IsEditable = true;
+                        p.IsRemovable = true;
+                    }
                 }
             }
 
+            // if only 1 output port, make all output port labels uneditable
             else if (Ports.Where(p => p.Type == NodeType.Output).Count() == 1)
             {
                 foreach (Port p in Ports)
                 {
                     if (p.Type == NodeType.Output)
+                    {
                         p.IsEditable = false;
+                        p.IsRemovable = false;
+                    }
                 }
             }
         }

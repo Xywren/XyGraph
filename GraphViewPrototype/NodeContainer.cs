@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -8,8 +7,8 @@ namespace GraphViewPrototype
 {
     public class NodeContainer : Border
     {
-        private StackPanel stackPanel;
-        private Node node;
+        public StackPanel stackPanel;
+        public Node node;
 
         public NodeContainer(Node node, Brush background, Orientation orientation = Orientation.Vertical, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Left)
         {
@@ -31,6 +30,7 @@ namespace GraphViewPrototype
             {
                 node.Ports.Add(port);
                 node.PortsChanged();
+                port.parentContainer = this;
             }
         }
     }

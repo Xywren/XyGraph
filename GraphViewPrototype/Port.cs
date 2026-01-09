@@ -26,6 +26,10 @@ namespace GraphViewPrototype
         public Socket Socket { get; private set; }
         private UIElement label;
         private bool isEditable = false;
+        private Node parentNode;
+        internal NodeContainer parentContainer;
+        private Button button;
+        private bool isRemovable = false;
 
         public bool IsEditable
         {
@@ -37,68 +41,85 @@ namespace GraphViewPrototype
                     isEditable = value;
                     if (Child is Grid g)
                     {
-                        g.Children.Remove(label);
+                        int idx = g.Children.IndexOf(label);
+                        g.Children.RemoveAt(idx);
                         UpdateLabel();
-                        g.Children.Add(label);
+                        g.Children.Insert(idx, label);
+                        Grid.SetColumn(label, 1);
                     }
+                }
+            }
+        }
+
+        public bool IsRemovable
+        {
+            get { return isRemovable; }
+            set
+            {
+                if (isRemovable != value)
+                {
+                    isRemovable = value;
+                    button.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
                 }
             }
         }
 
         private void UpdateLabel()
         {
+
+            HorizontalAlignment alignment = Type == NodeType.Input ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             if (isEditable)
             {
                 TextBox textBox = new TextBox { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
                 textBox.TextChanged += (object sender, TextChangedEventArgs e) => { Name = textBox.Text; };
-                if (Type == NodeType.Input)
-                {
-                    textBox.HorizontalAlignment = HorizontalAlignment.Left;
-                }
-                else
-                {
-                    textBox.HorizontalAlignment = HorizontalAlignment.Right;
-                }
+                textBox.HorizontalAlignment = alignment;
                 label = textBox;
             }
             else
             {
                 TextBlock textBlock = new TextBlock { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
-                if (Type == NodeType.Input)
-                {
-                    textBlock.HorizontalAlignment = HorizontalAlignment.Left;
-                }
-                else
-                {
-                    textBlock.HorizontalAlignment = HorizontalAlignment.Right;
-                }
+                textBlock.HorizontalAlignment = alignment;
                 label = textBlock;
             }
         }
 
-        public Port(string name, NodeType type)
+        public Port(string name, NodeType type, Node node)
         {
             Name = name;
             Type = type;
             Background = Brushes.Transparent;
             Grid grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); 
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); 
             Socket = new Socket();
             Socket.Port = this;
+            button = new Button { Content = "X", Width = 40, Height = 20 };
+            button.Click += (s, e) => {
+                if (parentContainer != null)
+                {
+                    parentContainer.stackPanel.Children.Remove(this);
+                    parentContainer.node.Ports.Remove(this);
+                    node.PortsChanged();
+                }
+            };
+            button.Visibility = isRemovable ? Visibility.Visible : Visibility.Collapsed;
             UpdateLabel();
             if (Type == NodeType.Input)
             {
                 Grid.SetColumn(Socket, 0);
                 Grid.SetColumn(label, 1);
-                grid.ColumnDefinitions[0].Width = GridLength.Auto;
-                grid.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
+                Grid.SetColumn(button, 2);
+                grid.ColumnDefinitions[1].Width = GridLength.Auto;
+                grid.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
             }
             else
             {
-                Grid.SetColumn(label, 0);
-                Grid.SetColumn(Socket, 1);
+                Grid.SetColumn(button, 0);
+                Grid.SetColumn(label, 1);
+                Grid.SetColumn(Socket, 2);
             }
+            grid.Children.Add(button);
             grid.Children.Add(Socket);
             grid.Children.Add(label);
             Child = grid;

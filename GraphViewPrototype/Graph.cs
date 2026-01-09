@@ -59,14 +59,14 @@ namespace GraphViewPrototype
             node.TitleContainer.Add(new TextBlock { Text = "Title", Foreground = Brushes.White });
             node.TitleContainer.Visibility = Visibility.Visible;
             node.TopContainer.Add(new TextBlock { Text = "Top", Foreground = Brushes.White });
-            Port inputPort = new Port("Input", NodeType.Input);
+            Port inputPort = new Port("Input", NodeType.Input, node);
 
             // output
-            Port outputPort = new Port("Output", NodeType.Output);
+            Port outputPort = new Port("Output", NodeType.Output, node);
             node.InputContainer.Add(inputPort);
             Button addOutputButton = new Button { Content = "Add Output", FontSize = 8, Height = 20 };
             addOutputButton.Click += (s, e) => {
-                Port newPort = new Port("New Output", NodeType.Output);
+                Port newPort = new Port("New Output", NodeType.Output, node);
                 node.OutputContainer.Add(newPort);
             };
 
