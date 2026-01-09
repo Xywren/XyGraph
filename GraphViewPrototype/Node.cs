@@ -61,7 +61,7 @@ namespace GraphViewPrototype
             grid.Children.Add(TopContainer);
 
             // Middle row containers
-            InputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Horizontal, HorizontalAlignment.Left);
+            InputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Vertical, HorizontalAlignment.Left);
             Grid.SetRow(InputContainer, 2);
             Grid.SetColumn(InputContainer, 0);
             grid.Children.Add(InputContainer);
@@ -71,7 +71,7 @@ namespace GraphViewPrototype
             Grid.SetColumn(MainContainer, 1);
             grid.Children.Add(MainContainer);
 
-            OutputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Horizontal, HorizontalAlignment.Right);
+            OutputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Vertical, HorizontalAlignment.Right);
             Grid.SetRow(OutputContainer, 2);
             Grid.SetColumn(OutputContainer, 2);
             grid.Children.Add(OutputContainer);
