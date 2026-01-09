@@ -31,6 +31,9 @@ namespace GraphViewPrototype
         private const double SNAP_DISTANCE = 25;
 
         private StartNode startNode;
+        private EndNode endNode;
+        MenuItem startItem; 
+        MenuItem endItem;
 
         public Graph()
         {
@@ -45,9 +48,13 @@ namespace GraphViewPrototype
             createItem.Click += (object sender, RoutedEventArgs e) => AddNode();
             ContextMenu.Items.Add(createItem);
 
-            MenuItem startItem = new MenuItem { Header = "Create Start Node" };
+            startItem = new MenuItem { Header = "Create Start Node" };
             startItem.Click += (object sender, RoutedEventArgs e) => AddStartNode();
             ContextMenu.Items.Add(startItem);
+
+            endItem = new MenuItem { Header = "Create End Node" };
+            endItem.Click += (object sender, RoutedEventArgs e) => AddEndNode();
+            ContextMenu.Items.Add(endItem);
         }
 
         private void OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -91,6 +98,19 @@ namespace GraphViewPrototype
                 Canvas.SetLeft(startNode, nodeCreatePos.X - NODE_OFFSET_X);
                 Canvas.SetTop(startNode, nodeCreatePos.Y - NODE_OFFSET_Y);
                 Children.Add(startNode);
+                startItem.IsEnabled = false;
+            }
+        }
+
+        private void AddEndNode()
+        {
+            if (endNode == null)
+            {
+                endNode = new EndNode();
+                Canvas.SetLeft(endNode, nodeCreatePos.X - NODE_OFFSET_X);
+                Canvas.SetTop(endNode, nodeCreatePos.Y - NODE_OFFSET_Y);
+                Children.Add(endNode);
+                endItem.IsEnabled = false;
             }
         }
 
@@ -176,6 +196,28 @@ namespace GraphViewPrototype
                                 targetPort = p;
                             }
                         }
+                    }
+                }
+                if (startNode != null && startNode.Port != edgeStartPort)
+                {
+                    Point portPos = startNode.Port.Socket.TranslatePoint(new Point(10, 10), this);
+                    double dist = (mousePos - portPos).Length;
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        snapPos = portPos;
+                        targetPort = startNode.Port;
+                    }
+                }
+                if (endNode != null && endNode.Port != edgeStartPort)
+                {
+                    Point portPos = endNode.Port.Socket.TranslatePoint(new Point(10, 10), this);
+                    double dist = (mousePos - portPos).Length;
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        snapPos = portPos;
+                        targetPort = endNode.Port;
                     }
                 }
                 tempConnectionLine.X2 = snapPos.X;
