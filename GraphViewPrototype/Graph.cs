@@ -55,6 +55,15 @@ namespace GraphViewPrototype
             Canvas.SetLeft(node, nodeCreatePos.X - NODE_OFFSET_X);
             Canvas.SetTop(node, nodeCreatePos.Y - NODE_OFFSET_Y);
             Children.Add(node);
+            node.TitleContainer.Add(new TextBlock { Text = "Title", Foreground = Brushes.White });
+            node.TitleContainer.Visibility = Visibility.Visible;
+            node.TopContainer.Add(new TextBlock { Text = "Top", Foreground = Brushes.White });
+            Port inputPort = new Port("Input", NodeType.Input);
+            Port outputPort = new Port("Output with a really really  long name", NodeType.Output);
+            node.InputContainer.Add(inputPort);
+            node.MainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
+            node.OutputContainer.Add(outputPort);
+            node.BottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });
         }
 
         private void OnMouseWheel(object sender, MouseWheelEventArgs e)
@@ -122,9 +131,9 @@ namespace GraphViewPrototype
                 double minDist = SNAP_DISTANCE;
                 foreach (Node n in nodes)
                 {
-                    foreach (Port port in n.GetPorts())
+                    foreach (Port port in n.Ports)
                     {
-                        if (port != edgeStartPort && port.IsInput != edgeStartPort.IsInput)
+                        if (port != edgeStartPort && port.Type != edgeStartPort.Type)
                         {
                             Point portPos = port.TranslatePoint(new Point(5, 5), this);
                             double dist = (mousePos - portPos).Length;

@@ -7,120 +7,84 @@ namespace GraphViewPrototype
 {
     public class Node : Border
     {
-        private const double NODE_WIDTH = 150;
-        private const double NODE_HEIGHT = 100;
-        private const int FIXED_ROW_HEIGHT = 20;
+        public const double MIN_NODE_WIDTH = 150;
+        public const double MIN_NODE_HEIGHT = 100;
         private const int CORNER_RADIUS = 10;
+        private Grid grid;
+        public List<Port> Ports = new List<Port>();
+
+        public NodeContainer TitleContainer { get; private set; }
+        public NodeContainer InputContainer { get; private set; }
+        public NodeContainer OutputContainer { get; private set; }
+        public NodeContainer TopContainer { get; private set; }
+        public NodeContainer MainContainer { get; private set; }
+        public NodeContainer BottomContainer { get; private set; }
 
         public Node()
         {
-            Width = NODE_WIDTH;
-            Height = NODE_HEIGHT;
+            //MinWidth = MIN_NODE_WIDTH;
+            //MinHeight = MIN_NODE_HEIGHT;
             Background = Brushes.DarkGray;
             CornerRadius = new CornerRadius(CORNER_RADIUS);
-            Child = CreateContent();
+            grid = CreateContent();
+            Child = grid;
         }
 
         private Grid CreateContent()
         {
             Grid grid = new Grid();
 
+            // Column definitions
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
             // Row definitions
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FIXED_ROW_HEIGHT) }); // Title
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Middle
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FIXED_ROW_HEIGHT) }); // Bottom
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Title
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Top
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Middle
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Bottom
 
             // Title container
-            Border titleBorder = new Border
-            {
-                Background = Brushes.DarkSlateGray,
-                CornerRadius = new CornerRadius(CORNER_RADIUS, CORNER_RADIUS, 0, 0),
-                Child = new TextBlock { Text = "Node Title", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
-            };
-            Grid.SetRow(titleBorder, 0);
-            grid.Children.Add(titleBorder);
+            TitleContainer = new NodeContainer(this, Brushes.DarkSlateGray);
+            Grid.SetRow(TitleContainer, 0);
+            Grid.SetColumn(TitleContainer, 0);
+            Grid.SetColumnSpan(TitleContainer, 3);
+            grid.Children.Add(TitleContainer);
+            TitleContainer.CornerRadius = new CornerRadius(CORNER_RADIUS, CORNER_RADIUS, 0, 0);
 
-            // Middle container with left and right
-            Grid middleGrid = new Grid();
-            middleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            middleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            // Top container
+            TopContainer = new NodeContainer(this, Brushes.LightGray);
+            Grid.SetRow(TopContainer, 1);
+            Grid.SetColumn(TopContainer, 0);
+            Grid.SetColumnSpan(TopContainer, 3);
+            grid.Children.Add(TopContainer);
 
-            Border inputBorder = new Border
-            {
-                Background = Brushes.Gray,
-                Child = new StackPanel
-                {
-                    Orientation = Orientation.Vertical,
-                    Children =
-                    {
-                        new TextBlock { Text = "Inputs", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
-                    }
-                }
-            };
-            Grid.SetColumn(inputBorder, 0);
-            middleGrid.Children.Add(inputBorder);
+            // Middle row containers
+            InputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Horizontal, HorizontalAlignment.Left);
+            Grid.SetRow(InputContainer, 2);
+            Grid.SetColumn(InputContainer, 0);
+            grid.Children.Add(InputContainer);
 
-            Border outputBorder = new Border
-            {
-                Background = Brushes.Gray,
-                Child = new StackPanel
-                {
-                    Orientation = Orientation.Vertical,
-                    Children =
-                    {
-                        new TextBlock { Text = "Outputs", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
-                    }
-                }
-            };
-            Grid.SetColumn(outputBorder, 1);
-            middleGrid.Children.Add(outputBorder);
+            MainContainer = new NodeContainer(this, Brushes.LightBlue);
+            Grid.SetRow(MainContainer, 2);
+            Grid.SetColumn(MainContainer, 1);
+            grid.Children.Add(MainContainer);
 
-            Grid.SetRow(middleGrid, 1);
-            grid.Children.Add(middleGrid);
-
-            // Input port aligned to left
-            Port inputPort = new Port { IsInput = true, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-            Grid.SetRow(inputPort, 1);
-            Grid.SetColumn(inputPort, 0);
-            grid.Children.Add(inputPort);
-
-            // Output port aligned to right
-            Port outputPort = new Port { IsInput = false, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-            Grid.SetRow(outputPort, 1);
-            Grid.SetColumn(outputPort, 1);
-            grid.Children.Add(outputPort);
+            OutputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Horizontal, HorizontalAlignment.Right);
+            Grid.SetRow(OutputContainer, 2);
+            Grid.SetColumn(OutputContainer, 2);
+            grid.Children.Add(OutputContainer);
 
             // Bottom container
-            Border bottomBorder = new Border
-            {
-                Background = Brushes.DimGray,
-                CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS),
-                Child = new TextBlock { Text = "Bottom", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
-            };
-            Grid.SetRow(bottomBorder, 2);
-            grid.Children.Add(bottomBorder);
+            BottomContainer = new NodeContainer(this, Brushes.DimGray);
+            Grid.SetRow(BottomContainer, 3);
+            Grid.SetColumn(BottomContainer, 0);
+            Grid.SetColumnSpan(BottomContainer, 3);
+            grid.Children.Add(BottomContainer);
+            BottomContainer.CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS);
 
             return grid;
-        }
-
-        public List<Port> GetPorts()
-        {
-            List<Port> ports = new List<Port>();
-            FindPorts(this, ports);
-            return ports;
-        }
-
-        private void FindPorts(UIElement element, List<Port> ports)
-        {
-            if (element is Port port)
-            {
-                ports.Add(port);
-            }
-            int count = VisualTreeHelper.GetChildrenCount(element);
-            for (int i = 0; i < count; i++)
-            {
-                FindPorts(VisualTreeHelper.GetChild(element, i) as UIElement, ports);
-            }
         }
     }
 }

@@ -4,12 +4,17 @@ using System.Windows.Media;
 
 namespace GraphViewPrototype
 {
+    public enum NodeType { Input, Output }
+
     public class Port : Border
     {
-        public bool IsInput { get; set; }
+        public NodeType Type { get; set; }
+        public string Name { get; set; }
 
-        public Port()
+        public Port(string name, NodeType type)
         {
+            Name = name;
+            Type = type;
             Width = 10;
             Height = 10;
             Background = Brushes.Black;
