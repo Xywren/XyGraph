@@ -9,13 +9,15 @@ namespace GraphViewPrototype
     public class Socket : Border
     {
         public Port Port { get; set; }
+        public int Size;
 
-        public Socket()
+        public Socket(int size = 10)
         {
-            Width = 10;
-            Height = 10;
+            Size = size;
+            Width = Size;
+            Height = Size;
             Background = Brushes.Black;
-            CornerRadius = new CornerRadius(5);
+            CornerRadius = new CornerRadius(Size);
         }
     }
 
@@ -83,7 +85,7 @@ namespace GraphViewPrototype
             }
         }
 
-        public Port(string name, NodeType type, Node node)
+        public Port(string name, NodeType type, Node node, int socketSize = 10)
         {
             Name = name;
             Type = type;
@@ -92,7 +94,7 @@ namespace GraphViewPrototype
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); 
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); 
-            Socket = new Socket();
+            Socket = new Socket(socketSize);
             Socket.Port = this;
             button = new Button { Content = "X", Width = 40, Height = 20 };
             button.Click += (s, e) => {

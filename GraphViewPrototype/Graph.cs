@@ -30,6 +30,8 @@ namespace GraphViewPrototype
         private const double NODE_OFFSET_Y = 50;
         private const double SNAP_DISTANCE = 25;
 
+        private StartNode startNode;
+
         public Graph()
         {
             Background = Brushes.White;
@@ -42,6 +44,10 @@ namespace GraphViewPrototype
             MenuItem createItem = new MenuItem { Header = "Create Node" };
             createItem.Click += (object sender, RoutedEventArgs e) => AddNode();
             ContextMenu.Items.Add(createItem);
+
+            MenuItem startItem = new MenuItem { Header = "Create Start Node" };
+            startItem.Click += (object sender, RoutedEventArgs e) => AddStartNode();
+            ContextMenu.Items.Add(startItem);
         }
 
         private void OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -75,6 +81,17 @@ namespace GraphViewPrototype
 
             node.MainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
             node.BottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });
+        }
+
+        private void AddStartNode()
+        {
+            if (startNode == null)
+            {
+                startNode = new StartNode();
+                Canvas.SetLeft(startNode, nodeCreatePos.X - NODE_OFFSET_X);
+                Canvas.SetTop(startNode, nodeCreatePos.Y - NODE_OFFSET_Y);
+                Children.Add(startNode);
+            }
         }
 
         private void OnMouseWheel(object sender, MouseWheelEventArgs e)
@@ -136,7 +153,8 @@ namespace GraphViewPrototype
             if (currentState == GraphState.CreatingEdge)
             {
                 Point mousePos = e.GetPosition(this);
-                Point startPos = edgeStartPort.Socket.TranslatePoint(new Point(5, 5), this);
+                int startOffset = edgeStartPort.Socket.Size / 2;
+                Point startPos = edgeStartPort.Socket.TranslatePoint(new Point(startOffset, startOffset), this);
                 tempConnectionLine.X1 = startPos.X;
                 tempConnectionLine.Y1 = startPos.Y;
                 Point snapPos = mousePos;
@@ -148,7 +166,8 @@ namespace GraphViewPrototype
                     {
                         if (p != edgeStartPort && p.Type != edgeStartPort.Type)
                         {
-                            Point portPos = p.Socket.TranslatePoint(new Point(5, 5), this);
+                            int endOffset = p.Socket.Size / 2;
+                            Point portPos = p.Socket.TranslatePoint(new Point(endOffset, endOffset), this);
                             double dist = (mousePos - portPos).Length;
                             if (dist < minDist)
                             {
