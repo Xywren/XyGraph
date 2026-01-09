@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -47,7 +48,14 @@ namespace GraphViewPrototype
             Border inputBorder = new Border
             {
                 Background = Brushes.Gray,
-                Child = new TextBlock { Text = "Inputs", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Vertical,
+                    Children =
+                    {
+                        new TextBlock { Text = "Inputs", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
+                    }
+                }
             };
             Grid.SetColumn(inputBorder, 0);
             middleGrid.Children.Add(inputBorder);
@@ -55,13 +63,32 @@ namespace GraphViewPrototype
             Border outputBorder = new Border
             {
                 Background = Brushes.Gray,
-                Child = new TextBlock { Text = "Outputs", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Vertical,
+                    Children =
+                    {
+                        new TextBlock { Text = "Outputs", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
+                    }
+                }
             };
             Grid.SetColumn(outputBorder, 1);
             middleGrid.Children.Add(outputBorder);
 
             Grid.SetRow(middleGrid, 1);
             grid.Children.Add(middleGrid);
+
+            // Input port aligned to left
+            Port inputPort = new Port { IsInput = true, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            Grid.SetRow(inputPort, 1);
+            Grid.SetColumn(inputPort, 0);
+            grid.Children.Add(inputPort);
+
+            // Output port aligned to right
+            Port outputPort = new Port { IsInput = false, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+            Grid.SetRow(outputPort, 1);
+            Grid.SetColumn(outputPort, 1);
+            grid.Children.Add(outputPort);
 
             // Bottom container
             Border bottomBorder = new Border
@@ -74,6 +101,26 @@ namespace GraphViewPrototype
             grid.Children.Add(bottomBorder);
 
             return grid;
+        }
+
+        public List<Port> GetPorts()
+        {
+            List<Port> ports = new List<Port>();
+            FindPorts(this, ports);
+            return ports;
+        }
+
+        private void FindPorts(UIElement element, List<Port> ports)
+        {
+            if (element is Port port)
+            {
+                ports.Add(port);
+            }
+            int count = VisualTreeHelper.GetChildrenCount(element);
+            for (int i = 0; i < count; i++)
+            {
+                FindPorts(VisualTreeHelper.GetChild(element, i) as UIElement, ports);
+            }
         }
     }
 }

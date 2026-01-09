@@ -1,26 +1,35 @@
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace GraphViewPrototype
 {
-    public class GraphCanvas : Canvas
+    public class Graph : Canvas
     {
+        private enum GraphState { None, Panning, DraggingNode, CreatingEdge }
+
+        private GraphState currentState = GraphState.None;
         private Point lastMousePos;
-        private bool isPanning;
         private Point nodeCreatePos;
-        private bool isDraggingNode;
         private UIElement draggedNode;
         private Point dragStartPos;
+        private Port edgeStartPort;
+        private Line tempConnectionLine;
+        private List<Edge> edges = new List<Edge>();
+        private List<Node> nodes = new List<Node>();
+        private Port targetPort;
 
         private const double ZOOM_FACTOR = 1.1;
         private const double ZOOM_REDUCE = 0.9;
         private const int GRID_SIZE = 20;
         private const double NODE_OFFSET_X = 75;
         private const double NODE_OFFSET_Y = 50;
+        private const double SNAP_DISTANCE = 25;
 
-        public GraphCanvas()
+        public Graph()
         {
             Background = Brushes.White;
             MouseWheel += OnMouseWheel;
@@ -42,6 +51,7 @@ namespace GraphViewPrototype
         private void AddNode()
         {
             Node node = new Node();
+            nodes.Add(node);
             Canvas.SetLeft(node, nodeCreatePos.X - NODE_OFFSET_X);
             Canvas.SetTop(node, nodeCreatePos.Y - NODE_OFFSET_Y);
             Children.Add(node);
@@ -72,20 +82,28 @@ namespace GraphViewPrototype
 
         private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.Source != this && !isDraggingNode)
+            if (e.Source is Port && currentState == GraphState.None)
+            {
+                edgeStartPort = e.Source as Port;
+                currentState = GraphState.CreatingEdge;
+                tempConnectionLine = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false };
+                Children.Add(tempConnectionLine);
+                CaptureMouse();
+            }
+            else if (e.Source != this && currentState == GraphState.None)
             {
                 UIElement node = GetNodeFromSource(e.Source);
                 if (node != null)
                 {
-                    isDraggingNode = true;
+                    currentState = GraphState.DraggingNode;
                     draggedNode = node;
                     dragStartPos = e.GetPosition(this);
                     CaptureMouse();
                 }
             }
-            else if (e.Source == this && !isDraggingNode)
+            else if (e.Source == this && currentState == GraphState.None)
             {
-                isPanning = true;
+                currentState = GraphState.Panning;
                 lastMousePos = e.GetPosition(Window.GetWindow(this));
                 CaptureMouse();
             }
@@ -93,15 +111,51 @@ namespace GraphViewPrototype
 
         private void OnMouseMove(object sender, MouseEventArgs e)
         {
-            if (isDraggingNode)
+            if (currentState == GraphState.CreatingEdge)
+            {
+                Point mousePos = e.GetPosition(this);
+                Point startPos = edgeStartPort.TranslatePoint(new Point(5, 5), this);
+                tempConnectionLine.X1 = startPos.X;
+                tempConnectionLine.Y1 = startPos.Y;
+                Point snapPos = mousePos;
+                targetPort = null;
+                double minDist = SNAP_DISTANCE;
+                foreach (Node n in nodes)
+                {
+                    foreach (Port port in n.GetPorts())
+                    {
+                        if (port != edgeStartPort && port.IsInput != edgeStartPort.IsInput)
+                        {
+                            Point portPos = port.TranslatePoint(new Point(5, 5), this);
+                            double dist = (mousePos - portPos).Length;
+                            if (dist < minDist)
+                            {
+                                minDist = dist;
+                                snapPos = portPos;
+                                targetPort = port;
+                            }
+                        }
+                    }
+                }
+                tempConnectionLine.X2 = snapPos.X;
+                tempConnectionLine.Y2 = snapPos.Y;
+            }
+            else if (currentState == GraphState.DraggingNode)
             {
                 Point pos = e.GetPosition(this);
                 Vector delta = pos - dragStartPos;
-                Canvas.SetLeft(draggedNode, Canvas.GetLeft(draggedNode) + delta.X);
-                Canvas.SetTop(draggedNode, Canvas.GetTop(draggedNode) + delta.Y);
+                double currentLeft = Canvas.GetLeft(draggedNode);
+                double currentTop = Canvas.GetTop(draggedNode);
+                Canvas.SetLeft(draggedNode, currentLeft + delta.X);
+                Canvas.SetTop(draggedNode, currentTop + delta.Y);
                 dragStartPos = pos;
+                // Update edges
+                foreach (Edge conn in edges)
+                {
+                    conn.UpdatePosition(this);
+                }
             }
-            else if (isPanning)
+            else if (currentState == GraphState.Panning)
             {
                 Point pos = e.GetPosition(Window.GetWindow(this));
                 Vector delta = pos - lastMousePos;
@@ -115,17 +169,38 @@ namespace GraphViewPrototype
 
         private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (isDraggingNode)
+            if (currentState == GraphState.CreatingEdge)
             {
-                isDraggingNode = false;
+                currentState = GraphState.None;
+                Children.Remove(tempConnectionLine);
+                tempConnectionLine = null;
+                if (targetPort != null)
+                {
+                    CreateEdge(edgeStartPort, targetPort);
+                }
+                edgeStartPort = null;
+                targetPort = null;
+                ReleaseMouseCapture();
+            }
+            else if (currentState == GraphState.DraggingNode)
+            {
+                currentState = GraphState.None;
                 draggedNode = null;
                 ReleaseMouseCapture();
             }
-            else if (isPanning)
+            else if (currentState == GraphState.Panning)
             {
-                isPanning = false;
+                currentState = GraphState.None;
                 ReleaseMouseCapture();
             }
+        }
+
+        private void CreateEdge(Port from, Port to)
+        {
+            Edge conn = new Edge { FromPort = from, ToPort = to, Line = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false } };
+            conn.UpdatePosition(this);
+            Children.Add(conn.Line);
+            edges.Add(conn);
         }
 
         protected override void OnRender(DrawingContext dc)
