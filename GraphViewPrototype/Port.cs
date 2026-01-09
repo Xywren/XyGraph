@@ -31,20 +31,25 @@ namespace GraphViewPrototype
             Type = type;
             Background = Brushes.Transparent;
             Grid grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Socket = new Socket();
             Socket.Port = this;
-            TextBlock label = new TextBlock { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
-            if (Type == NodeType.Output)
+            TextBox label = new TextBox { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
+            label.TextChanged += (s, e) => { Name = label.Text; };
+            if (Type == NodeType.Input)
             {
-                Grid.SetColumn(label, 0);
-                Grid.SetColumn(Socket, 1);
+                label.HorizontalAlignment = HorizontalAlignment.Left;
+                Grid.SetColumn(Socket, 0);
+                Grid.SetColumn(label, 1);
+                grid.ColumnDefinitions[0].Width = GridLength.Auto;
+                grid.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
             }
             else
             {
-                Grid.SetColumn(Socket, 0);
-                Grid.SetColumn(label, 1);
+                label.HorizontalAlignment = HorizontalAlignment.Right;
+                Grid.SetColumn(label, 0);
+                Grid.SetColumn(Socket, 1);
             }
             grid.Children.Add(Socket);
             grid.Children.Add(label);
