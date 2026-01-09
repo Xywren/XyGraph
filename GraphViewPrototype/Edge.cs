@@ -17,8 +17,8 @@ namespace GraphViewPrototype
 
         public void UpdatePosition(Graph canvas)
         {
-            Point start = FromPort.TranslatePoint(new Point(5, 5), canvas);
-            Point end = ToPort.TranslatePoint(new Point(5, 5), canvas);
+            Point start = FromPort.Socket.TranslatePoint(new Point(5, 5), canvas);
+            Point end = ToPort.Socket.TranslatePoint(new Point(5, 5), canvas);
 
             if (Style == EdgeStyle.Linear)
             {

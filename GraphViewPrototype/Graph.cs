@@ -95,11 +95,13 @@ namespace GraphViewPrototype
             return null;
         }
 
+
         private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.Source is Port && currentState == GraphState.None)
+            if(e.Source is Socket && currentState == GraphState.None)
             {
-                edgeStartPort = e.Source as Port;
+                Port port = (e.Source as Socket).Port;
+                edgeStartPort = port;
                 currentState = GraphState.CreatingEdge;
                 tempConnectionLine = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false };
                 Children.Add(tempConnectionLine);
@@ -129,7 +131,7 @@ namespace GraphViewPrototype
             if (currentState == GraphState.CreatingEdge)
             {
                 Point mousePos = e.GetPosition(this);
-                Point startPos = edgeStartPort.TranslatePoint(new Point(5, 5), this);
+                Point startPos = edgeStartPort.Socket.TranslatePoint(new Point(5, 5), this);
                 tempConnectionLine.X1 = startPos.X;
                 tempConnectionLine.Y1 = startPos.Y;
                 Point snapPos = mousePos;
@@ -137,17 +139,17 @@ namespace GraphViewPrototype
                 double minDist = SNAP_DISTANCE;
                 foreach (Node n in nodes)
                 {
-                    foreach (Port port in n.Ports)
+                    foreach (Port p in n.Ports)
                     {
-                        if (port != edgeStartPort && port.Type != edgeStartPort.Type)
+                        if (p != edgeStartPort && p.Type != edgeStartPort.Type)
                         {
-                            Point portPos = port.TranslatePoint(new Point(5, 5), this);
+                            Point portPos = p.Socket.TranslatePoint(new Point(5, 5), this);
                             double dist = (mousePos - portPos).Length;
                             if (dist < minDist)
                             {
                                 minDist = dist;
                                 snapPos = portPos;
-                                targetPort = port;
+                                targetPort = p;
                             }
                         }
                     }
