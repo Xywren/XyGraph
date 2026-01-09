@@ -197,9 +197,9 @@ namespace GraphViewPrototype
 
         private void CreateEdge(Port from, Port to)
         {
-            Edge conn = new Edge { FromPort = from, ToPort = to, Line = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false } };
+            Edge conn = new Edge { FromPort = from, ToPort = to };
             conn.UpdatePosition(this);
-            Children.Add(conn.Line);
+            Children.Add(conn.Visual);
             edges.Add(conn);
         }
 
