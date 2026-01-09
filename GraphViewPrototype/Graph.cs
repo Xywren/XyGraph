@@ -19,8 +19,8 @@ namespace GraphViewPrototype
         private Point dragStartPos;
         private Port edgeStartPort;
         private Line tempConnectionLine;
-        private List<Edge> edges = new List<Edge>();
-        private List<Node> nodes = new List<Node>();
+        public List<Edge> edges = new List<Edge>();
+        public List<Node> nodes = new List<Node>();
         private Port targetPort;
 
         private const double ZOOM_FACTOR = 1.1;
@@ -64,7 +64,7 @@ namespace GraphViewPrototype
 
         private void AddNode()
         {
-            Node node = new Node();
+            Node node = new Node(this);
             nodes.Add(node);
             Canvas.SetLeft(node, nodeCreatePos.X - NODE_OFFSET_X);
             Canvas.SetTop(node, nodeCreatePos.Y - NODE_OFFSET_Y);
@@ -280,7 +280,7 @@ namespace GraphViewPrototype
 
         private void CreateEdge(Port from, Port to)
         {
-            Edge conn = new Edge { FromPort = from, ToPort = to };
+            Edge conn = new Edge(this, from, to);
             conn.UpdatePosition(this);
             Children.Add(conn.Visual);
             edges.Add(conn);

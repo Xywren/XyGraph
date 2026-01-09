@@ -8,17 +8,27 @@ namespace GraphViewPrototype
 
     public class Edge
     {
+
         private const double BEZIER_STRENGTH = 100;
 
         public Port FromPort { get; set; }
         public Port ToPort { get; set; }
         public EdgeStyle Style { get; set; } = EdgeStyle.Bezier;
         public UIElement Visual { get; set; }
+        private Graph graph;
+
+
+        public Edge(Graph graph, Port fromPort, Port toPort)
+        {
+            this.graph = graph;
+            FromPort = fromPort;
+            ToPort = toPort;
+        }
 
         public void UpdatePosition(Graph canvas)
         {
-            Point start = FromPort.Socket.TranslatePoint(new Point(5, 5), canvas);
-            Point end = ToPort.Socket.TranslatePoint(new Point(5, 5), canvas);
+            Point start = FromPort.Socket.TranslatePoint(new Point(FromPort.Socket.Size / 2, FromPort.Socket.Size / 2), canvas);
+            Point end = ToPort.Socket.TranslatePoint(new Point(ToPort.Socket.Size / 2, ToPort.Socket.Size / 2), canvas);
 
             if (Style == EdgeStyle.Linear)
             {
@@ -56,6 +66,12 @@ namespace GraphViewPrototype
                     Visual = new Path { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false, Data = geometry };
                 }
             }
+        }
+
+        public void Delete()
+        {
+            graph.Children.Remove(Visual);
+            graph.edges.Remove(this);
         }
     }
 }

@@ -22,12 +22,19 @@ namespace GraphViewPrototype
         public NodeContainer MainContainer { get; private set; }
         public NodeContainer BottomContainer { get; private set; }
 
-        public Node()
+        public Graph graph;
+
+        public Node(Graph graph)
         {
+            this.graph = graph;
             Background = Brushes.DarkGray;
             CornerRadius = new CornerRadius(CORNER_RADIUS);
             grid = CreateContent();
             Child = grid;
+            ContextMenu = new ContextMenu();
+            MenuItem deleteItem = new MenuItem { Header = "Delete Node" };
+            deleteItem.Click += (s, e) => this.Delete();
+            ContextMenu.Items.Add(deleteItem);
         }
 
         private Grid CreateContent()
@@ -114,6 +121,17 @@ namespace GraphViewPrototype
                     }
                 }
             }
+        }
+
+        public void Delete()
+        {
+            List<Edge> edgesToRemove = graph.edges.Where(edge => this.Ports.Contains(edge.FromPort) || this.Ports.Contains(edge.ToPort)).ToList();
+            foreach (Edge edge in edgesToRemove)
+            {
+                edge.Delete();
+            }
+            graph.Children.Remove(this);
+            graph.nodes.Remove(this);
         }
     }
 }
