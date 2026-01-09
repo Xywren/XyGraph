@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Xml.Linq;
 
 namespace GraphViewPrototype
 {
@@ -85,6 +86,28 @@ namespace GraphViewPrototype
             BottomContainer.CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS);
 
             return grid;
+        }
+
+        public void PortsChanged()
+        {
+            // if more than 1 output port, make all output port labels editable
+            if (Ports.Where(p => p.Type == NodeType.Output).Count() >= 2)
+            {
+                foreach (Port p in Ports)
+                {
+                    if (p.Type == NodeType.Output)
+                        p.IsEditable = true;
+                }
+            }
+
+            else if (Ports.Where(p => p.Type == NodeType.Output).Count() == 1)
+            {
+                foreach (Port p in Ports)
+                {
+                    if (p.Type == NodeType.Output)
+                        p.IsEditable = false;
+                }
+            }
         }
     }
 }

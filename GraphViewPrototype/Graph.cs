@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -59,16 +60,20 @@ namespace GraphViewPrototype
             node.TitleContainer.Visibility = Visibility.Visible;
             node.TopContainer.Add(new TextBlock { Text = "Top", Foreground = Brushes.White });
             Port inputPort = new Port("Input", NodeType.Input);
-            Port outputPort = new Port("Output with a really really  long name", NodeType.Output);
+
+            // output
+            Port outputPort = new Port("Output", NodeType.Output);
             node.InputContainer.Add(inputPort);
             Button addOutputButton = new Button { Content = "Add Output", FontSize = 8, Height = 20 };
             addOutputButton.Click += (s, e) => {
-                Port newPort = new Port("Output", NodeType.Output);
+                Port newPort = new Port("New Output", NodeType.Output);
                 node.OutputContainer.Add(newPort);
             };
+
             node.OutputContainer.Add(addOutputButton);
-            node.MainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
             node.OutputContainer.Add(outputPort);
+
+            node.MainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
             node.BottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });
         }
 

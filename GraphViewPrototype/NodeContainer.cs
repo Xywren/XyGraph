@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -29,6 +30,7 @@ namespace GraphViewPrototype
             if (child is Port port)
             {
                 node.Ports.Add(port);
+                node.PortsChanged();
             }
         }
     }

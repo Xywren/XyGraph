@@ -24,6 +24,57 @@ namespace GraphViewPrototype
         public NodeType Type { get; set; }
         public string Name { get; set; }
         public Socket Socket { get; private set; }
+        private UIElement label;
+        private bool isEditable = false;
+
+        public bool IsEditable
+        {
+            get { return isEditable; }
+            set
+            {
+                if (isEditable != value)
+                {
+                    isEditable = value;
+                    if (Child is Grid g)
+                    {
+                        g.Children.Remove(label);
+                        UpdateLabel();
+                        g.Children.Add(label);
+                    }
+                }
+            }
+        }
+
+        private void UpdateLabel()
+        {
+            if (isEditable)
+            {
+                TextBox textBox = new TextBox { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
+                textBox.TextChanged += (object sender, TextChangedEventArgs e) => { Name = textBox.Text; };
+                if (Type == NodeType.Input)
+                {
+                    textBox.HorizontalAlignment = HorizontalAlignment.Left;
+                }
+                else
+                {
+                    textBox.HorizontalAlignment = HorizontalAlignment.Right;
+                }
+                label = textBox;
+            }
+            else
+            {
+                TextBlock textBlock = new TextBlock { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
+                if (Type == NodeType.Input)
+                {
+                    textBlock.HorizontalAlignment = HorizontalAlignment.Left;
+                }
+                else
+                {
+                    textBlock.HorizontalAlignment = HorizontalAlignment.Right;
+                }
+                label = textBlock;
+            }
+        }
 
         public Port(string name, NodeType type)
         {
@@ -35,19 +86,16 @@ namespace GraphViewPrototype
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Socket = new Socket();
             Socket.Port = this;
-            TextBox label = new TextBox { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
-            label.TextChanged += (s, e) => { Name = label.Text; };
+            UpdateLabel();
             if (Type == NodeType.Input)
             {
-                label.HorizontalAlignment = HorizontalAlignment.Left;
                 Grid.SetColumn(Socket, 0);
                 Grid.SetColumn(label, 1);
                 grid.ColumnDefinitions[0].Width = GridLength.Auto;
-                grid.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+                grid.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
             }
             else
             {
-                label.HorizontalAlignment = HorizontalAlignment.Right;
                 Grid.SetColumn(label, 0);
                 Grid.SetColumn(Socket, 1);
             }
