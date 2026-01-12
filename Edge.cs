@@ -23,6 +23,9 @@ namespace XyGraph
             this.graph = graph;
             this.fromPort = fromPort;
             this.toPort = toPort;
+
+            fromPort.ConnectionMade(this);
+            toPort.ConnectionMade(this);
         }
 
         public void UpdatePosition(Graph canvas)
@@ -46,8 +49,8 @@ namespace XyGraph
             }
             else // Bezier
             {
-                Vector point1Offset = fromPort.type == NodeType.Output ? new Vector(BEZIER_STRENGTH, 0) : new Vector(-BEZIER_STRENGTH, 0);
-                Vector point2Offset = toPort.type == NodeType.Input ? new Vector(-BEZIER_STRENGTH, 0) : new Vector(BEZIER_STRENGTH, 0);
+                Vector point1Offset = fromPort.type == PortType.Output ? new Vector(BEZIER_STRENGTH, 0) : new Vector(-BEZIER_STRENGTH, 0);
+                Vector point2Offset = toPort.type == PortType.Input ? new Vector(-BEZIER_STRENGTH, 0) : new Vector(BEZIER_STRENGTH, 0);
 
                 PathGeometry geometry = new PathGeometry();
                 PathFigure figure = new PathFigure { StartPoint = start };

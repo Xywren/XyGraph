@@ -16,7 +16,7 @@ namespace XyGraph
         public EndNode(Graph graph)
         {
             this.graph = graph;
-            Port port = new Port("", NodeType.Input, null, 20);
+            Port port = new Port("", PortType.Input, null, 20);
             port.isEditable = false;
             port.isRemovable = false;
             Border outline = new Border

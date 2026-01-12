@@ -16,7 +16,7 @@ namespace XyGraph
         public StartNode(Graph graph)
         {
             this.graph = graph;
-            Port port = new Port("", NodeType.Output, null, 20);
+            Port port = new Port("", PortType.Output, null, 20);
             port.isEditable = false;
             port.isRemovable = false;
             port.socket.Background = Brushes.Black;

@@ -112,11 +112,11 @@ namespace XyGraph
         public void PortsChanged()
         {
             // if more than 1 output port, make all output port labels editable
-            if (ports.Where(p => p.type == NodeType.Output).Count() >= 2)
+            if (ports.Where(p => p.type == PortType.Output).Count() >= 2)
             {
                 foreach (Port p in ports)
                 {
-                    if (p.type == NodeType.Output)
+                    if (p.type == PortType.Output)
                     {
                         p.isEditable = true;
                         p.isRemovable = true;
@@ -125,11 +125,11 @@ namespace XyGraph
             }
 
             // if only 1 output port, make all output port labels uneditable
-            else if (ports.Where(p => p.type == NodeType.Output).Count() == 1)
+            else if (ports.Where(p => p.type == PortType.Output).Count() == 1)
             {
                 foreach (Port p in ports)
                 {
-                    if (p.type == NodeType.Output)
+                    if (p.type == PortType.Output)
                     {
                         p.isEditable = false;
                         p.isRemovable = false;
