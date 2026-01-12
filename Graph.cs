@@ -6,7 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
-namespace GraphViewPrototype
+namespace XyGraph
 {
     public class Graph : Canvas
     {
@@ -30,10 +30,10 @@ namespace GraphViewPrototype
         private const double NODE_OFFSET_Y = 50;
         private const double SNAP_DISTANCE = 25;
 
-        private StartNode startNode;
-        private EndNode endNode;
-        MenuItem startItem; 
-        MenuItem endItem;
+        public StartNode startNode;
+        public EndNode endNode;
+        internal MenuItem startItem; 
+        internal MenuItem endItem;
 
         public Graph()
         {
@@ -94,7 +94,7 @@ namespace GraphViewPrototype
         {
             if (startNode == null)
             {
-                startNode = new StartNode();
+                startNode = new StartNode(this);
                 Canvas.SetLeft(startNode, nodeCreatePos.X - NODE_OFFSET_X);
                 Canvas.SetTop(startNode, nodeCreatePos.Y - NODE_OFFSET_Y);
                 Children.Add(startNode);
@@ -106,7 +106,7 @@ namespace GraphViewPrototype
         {
             if (endNode == null)
             {
-                endNode = new EndNode();
+                endNode = new EndNode(this);
                 Canvas.SetLeft(endNode, nodeCreatePos.X - NODE_OFFSET_X);
                 Canvas.SetTop(endNode, nodeCreatePos.Y - NODE_OFFSET_Y);
                 Children.Add(endNode);

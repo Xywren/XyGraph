@@ -5,7 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Xml.Linq;
 
-namespace GraphViewPrototype
+namespace XyGraph
 {
     public class Node : Border
     {
