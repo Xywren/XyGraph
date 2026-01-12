@@ -27,9 +27,17 @@ namespace XyGraph
                 BorderThickness = new Thickness(2),
                 CornerRadius = new CornerRadius(12)
             };
+
+            port.HorizontalAlignment = HorizontalAlignment.Center;
+
             Grid g = port.Child as Grid;
             g.Children.Add(outline);
-            Child = port;
+
+            StackPanel sp = new StackPanel();
+            sp.Children.Add(new TextBlock { Text = "END", HorizontalAlignment = HorizontalAlignment.Center });
+            sp.Children.Add(port);
+            Child = sp;
+
             this.port = port;
             ContextMenu = new ContextMenu();
             MenuItem deleteItem = new MenuItem { Header = "Delete End Node" };

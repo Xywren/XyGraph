@@ -20,7 +20,13 @@ namespace XyGraph
             port.isEditable = false;
             port.isRemovable = false;
             port.socket.Background = Brushes.Black;
-            Child = port;
+
+            StackPanel sp = new StackPanel();
+            TextBlock tb = new TextBlock { Text = "START", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 4) };
+            sp.Children.Add(tb);
+            sp.Children.Add(port);
+            Child = sp;
+
             this.port = port;
             ContextMenu = new ContextMenu();
             MenuItem deleteItem = new MenuItem { Header = "Delete Start Node" };
