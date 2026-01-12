@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -11,6 +12,8 @@ namespace XyGraph
 
         private const double BEZIER_STRENGTH = 100;
 
+        public Guid guid;
+
         public Port fromPort { get; private set; }
         public Port toPort { get; private set; }
         public EdgeStyle style { get; private set; } = EdgeStyle.Bezier;
@@ -20,6 +23,8 @@ namespace XyGraph
 
         public Edge(Graph graph, Port fromPort, Port toPort)
         {
+            guid = Guid.NewGuid();
+
             this.graph = graph;
             this.fromPort = fromPort;
             this.toPort = toPort;

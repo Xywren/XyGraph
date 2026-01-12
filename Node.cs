@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -8,6 +9,8 @@ namespace XyGraph
 {
     public class Node : Border
     {
+        public Guid guid;
+
         public const double MIN_NODE_WIDTH = 150;
         public const double MIN_NODE_HEIGHT = 100;
         private const int CORNER_RADIUS = 10;
@@ -36,6 +39,8 @@ namespace XyGraph
 
         public Node(Graph graph)
         {
+            guid = Guid.NewGuid();
+
             this.graph = graph;
             Background = Brushes.DarkGray;
             CornerRadius = new CornerRadius(CORNER_RADIUS);

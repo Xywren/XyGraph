@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -24,6 +25,8 @@ namespace XyGraph
 
     public class Port : Border
     {
+        public Guid guid;
+
         private const int DEFAULT_SOCKET_SIZE = 10;
         private const int BUTTON_WIDTH = 40;
         private const int BUTTON_HEIGHT = 20;
@@ -88,6 +91,8 @@ namespace XyGraph
 
         public Port(string name, PortType type, Node node, int socketSize = DEFAULT_SOCKET_SIZE)
         {
+            guid = Guid.NewGuid();
+
             this.name = name;
             this.type = type;
             Background = Brushes.Transparent;

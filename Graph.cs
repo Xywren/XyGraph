@@ -201,7 +201,18 @@ namespace XyGraph
                 Canvas.SetTop(draggedNode, currentTop + delta.Y);
                 dragStartPos = pos;
                 // Update edges
-                (draggedNode as Node).RedrawEdges();
+                if(draggedNode is Node node)
+                    node.RedrawEdges();
+                else if (draggedNode is StartNode start)
+                {
+                    foreach (Edge edge in start.port.edges)
+                        edge.UpdatePosition();
+                }
+                else if (draggedNode is EndNode end)
+                {
+                    foreach (Edge edge in end.port.edges)
+                        edge.UpdatePosition();
+                }
             }
             else if (currentState == GraphState.Panning)
             {
