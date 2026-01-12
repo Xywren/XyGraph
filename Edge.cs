@@ -28,10 +28,10 @@ namespace XyGraph
             toPort.ConnectionMade(this);
         }
 
-        public void UpdatePosition(Graph canvas)
+        public void UpdatePosition()
         {
-            Point start = fromPort.socket.TranslatePoint(new Point(fromPort.socket.size / 2, fromPort.socket.size / 2), canvas);
-            Point end = toPort.socket.TranslatePoint(new Point(toPort.socket.size / 2, toPort.socket.size / 2), canvas);
+            Point start = fromPort.socket.TranslatePoint(new Point(fromPort.socket.size / 2, fromPort.socket.size / 2), graph);
+            Point end = toPort.socket.TranslatePoint(new Point(toPort.socket.size / 2, toPort.socket.size / 2), graph);
 
             if (style == EdgeStyle.Linear)
             {

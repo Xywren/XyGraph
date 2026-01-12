@@ -20,6 +20,14 @@ namespace XyGraph
             MinHeight = Node.MIN_NODE_HEIGHT / 4;
             MinWidth = Node.MIN_NODE_WIDTH / 3;
             Padding = new Thickness(5);
+
+            this.SizeChanged += (s, e) => OnResize();
+        }
+
+        public void OnResize()
+        {
+            // if the container is resized, the ports may have moved so we need to re-draw edges
+            node.RedrawEdges();
         }
 
         public void Add(UIElement child)

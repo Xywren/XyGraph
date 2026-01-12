@@ -36,7 +36,7 @@ namespace XyGraph
         internal NodeContainer parentContainer;
         private Button button;
 
-        private List<Edge> connections = new List<Edge>();
+        public List<Edge> edges = new List<Edge>();
 
         public bool isEditable
         {
@@ -129,20 +129,20 @@ namespace XyGraph
         {
             if (connectionType == ConnectionType.Single)
             {
-                foreach (Edge edge in connections.ToList())
+                foreach (Edge edge in edges.ToList())
                 {
                     edge.Delete();
                 }
             }
 
-            connections.Add(connection);
+            edges.Add(connection);
         }
 
         public void Delete()
         {
             if (parentContainer != null)
             {
-                foreach (Edge edge in connections.ToList())
+                foreach (Edge edge in edges.ToList())
                 {
                     edge.Delete();
                 }

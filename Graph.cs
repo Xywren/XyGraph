@@ -201,10 +201,7 @@ namespace XyGraph
                 Canvas.SetTop(draggedNode, currentTop + delta.Y);
                 dragStartPos = pos;
                 // Update edges
-                foreach (Edge conn in edges)
-                {
-                    conn.UpdatePosition(this);
-                }
+                (draggedNode as Node).RedrawEdges();
             }
             else if (currentState == GraphState.Panning)
             {
@@ -255,7 +252,7 @@ namespace XyGraph
             }
 
             Edge conn = new Edge(this, from, to);
-            conn.UpdatePosition(this);
+            conn.UpdatePosition();
             Children.Add(conn.visual);
             edges.Add(conn);
         }

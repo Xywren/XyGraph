@@ -148,5 +148,27 @@ namespace XyGraph
             graph.Children.Remove(this);
             graph.nodes.Remove(this);
         }
+
+        public List<Edge> GetAllEdges()
+        {
+            List<Edge> edges = new List<Edge>();
+            foreach (Port port in ports)
+            {
+                foreach (Edge edge in port.edges)
+                {
+                    edges.Add(edge);
+                }
+            }
+            return edges;
+
+        }
+
+        public void RedrawEdges()
+        {
+            foreach (Edge e in GetAllEdges())
+            {
+                e.UpdatePosition();
+            }
+        }
     }
 }
