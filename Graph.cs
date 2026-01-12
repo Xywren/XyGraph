@@ -14,7 +14,7 @@ namespace XyGraph
 
         private GraphState currentState = GraphState.None;
         private Point lastMousePos;
-        public Point nodeCreatePos;
+        public Point rightClickPos;
         private UIElement draggedNode;
         private Point dragStartPos;
         private Port edgeStartPort;
@@ -26,8 +26,6 @@ namespace XyGraph
         private const double ZOOM_FACTOR = 1.1;
         private const double ZOOM_REDUCE = 0.9;
         private const int GRID_SIZE = 20;
-        private const double NODE_OFFSET_X = 75;
-        private const double NODE_OFFSET_Y = 50;
         private const double SNAP_DISTANCE = 25;
 
         public StartNode startNode { get; internal set; }
@@ -43,10 +41,8 @@ namespace XyGraph
             MouseMove += OnMouseMove;
             MouseLeftButtonUp += OnMouseLeftButtonUp;
             MouseRightButtonDown += OnMouseRightButtonDown;
+
             ContextMenu = new ContextMenu();
-            MenuItem createItem = new MenuItem { Header = "Create Node" };
-            createItem.Click += (object sender, RoutedEventArgs e) => AddNode();
-            ContextMenu.Items.Add(createItem);
 
             startItem = new MenuItem { Header = "Create Start Node" };
             startItem.Click += (object sender, RoutedEventArgs e) => AddStartNode();
@@ -59,34 +55,7 @@ namespace XyGraph
 
         private void OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
-            nodeCreatePos = e.GetPosition(this);
-        }
-
-        private void AddNode()
-        {
-            Node node = new Node(this);
-            nodes.Add(node);
-            Canvas.SetLeft(node, nodeCreatePos.X - NODE_OFFSET_X);
-            Canvas.SetTop(node, nodeCreatePos.Y - NODE_OFFSET_Y);
-            Children.Add(node);
-            
-            node.topContainer.Add(new TextBlock { Text = "Top", Foreground = Brushes.White });
-            Port inputPort = new Port("Input", NodeType.Input, node);
-
-            // output
-            Port outputPort = new Port("Output", NodeType.Output, node);
-            node.inputContainer.Add(inputPort);
-            Button addOutputButton = new Button { Content = "Add Output", FontSize = 8, Height = 20 };
-            addOutputButton.Click += (s, e) => {
-                Port newPort = new Port("New Output", NodeType.Output, node);
-                node.outputContainer.Add(newPort);
-            };
-
-            node.outputContainer.Add(addOutputButton);
-            node.outputContainer.Add(outputPort);
-
-            node.mainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
-            node.bottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });
+            rightClickPos = e.GetPosition(this);
         }
 
         private void AddStartNode()
@@ -94,8 +63,8 @@ namespace XyGraph
             if (startNode == null)
             {
                 startNode = new StartNode(this);
-                Canvas.SetLeft(startNode, nodeCreatePos.X - NODE_OFFSET_X);
-                Canvas.SetTop(startNode, nodeCreatePos.Y - NODE_OFFSET_Y);
+                Canvas.SetLeft(startNode, rightClickPos.X - StartNode.OffsetX);
+                Canvas.SetTop(startNode, rightClickPos.Y - StartNode.OffsetY);
                 Children.Add(startNode);
                 startItem.IsEnabled = false;
             }
@@ -106,8 +75,8 @@ namespace XyGraph
             if (endNode == null)
             {
                 endNode = new EndNode(this);
-                Canvas.SetLeft(endNode, nodeCreatePos.X - NODE_OFFSET_X);
-                Canvas.SetTop(endNode, nodeCreatePos.Y - NODE_OFFSET_Y);
+                Canvas.SetLeft(endNode, rightClickPos.X - EndNode.OffsetX);
+                Canvas.SetTop(endNode, rightClickPos.Y - EndNode.OffsetY);
                 Children.Add(endNode);
                 endItem.IsEnabled = false;
             }

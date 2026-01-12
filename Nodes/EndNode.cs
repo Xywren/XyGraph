@@ -7,6 +7,9 @@ namespace XyGraph
 {
     public class EndNode : Border
     {
+        public static readonly double OffsetX = 14;
+        public static readonly double OffsetY = 14;
+
         public Port port { get; private set; }
         private Graph graph;
 
