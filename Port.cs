@@ -8,108 +8,101 @@ namespace XyGraph
 
     public class Socket : Border
     {
-        public Port Port { get; set; }
-        public int Size;
+        public Port port;
+        public int size;
 
         public Socket(int size = 10)
         {
-            Size = size;
-            Width = Size;
-            Height = Size;
+            this.size = size;
+            Width = size;
+            Height = size;
             Background = Brushes.Black;
-            CornerRadius = new CornerRadius(Size);
+            CornerRadius = new CornerRadius(size);
         }
     }
 
     public class Port : Border
     {
-        public NodeType Type { get; set; }
-        public string Name { get; set; }
-        public Socket Socket { get; private set; }
+        private const int DEFAULT_SOCKET_SIZE = 10;
+        private const int BUTTON_WIDTH = 40;
+        private const int BUTTON_HEIGHT = 20;
+
+        public NodeType type;
+        public string name;
+        public Socket socket;
         private UIElement label;
-        private bool isEditable = false;
-        private Node parentNode;
         internal NodeContainer parentContainer;
         private Button button;
-        private bool isRemovable = false;
 
-        public bool IsEditable
+        public bool isEditable
         {
-            get { return isEditable; }
+            get;
             set
             {
-                if (isEditable != value)
+                if (Child is Grid g)
                 {
-                    isEditable = value;
-                    if (Child is Grid g)
-                    {
-                        int idx = g.Children.IndexOf(label);
-                        g.Children.RemoveAt(idx);
-                        UpdateLabel();
-                        g.Children.Insert(idx, label);
-                        Grid.SetColumn(label, 1);
-                    }
+                    int idx = g.Children.IndexOf(label);
+                    g.Children.RemoveAt(idx);
+                    UpdateLabel();
+                    g.Children.Insert(idx, label);
+                    Grid.SetColumn(label, 1);
                 }
             }
         }
 
-        public bool IsRemovable
+        public bool isRemovable
         {
-            get { return isRemovable; }
+            get;
             set
             {
-                if (isRemovable != value)
-                {
-                    isRemovable = value;
-                    button.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-                }
+                button.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
         private void UpdateLabel()
         {
 
-            HorizontalAlignment alignment = Type == NodeType.Input ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+            HorizontalAlignment alignment = type == NodeType.Input ? HorizontalAlignment.Left : HorizontalAlignment.Right;
             if (isEditable)
             {
-                TextBox textBox = new TextBox { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
-                textBox.TextChanged += (object sender, TextChangedEventArgs e) => { Name = textBox.Text; };
+                TextBox textBox = new TextBox { Text = name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
+                textBox.TextChanged += (object sender, TextChangedEventArgs e) => { name = textBox.Text; };
                 textBox.HorizontalAlignment = alignment;
                 label = textBox;
             }
             else
             {
-                TextBlock textBlock = new TextBlock { Text = Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
+                TextBlock textBlock = new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
                 textBlock.HorizontalAlignment = alignment;
                 label = textBlock;
             }
         }
 
-        public Port(string name, NodeType type, Node node, int socketSize = 10)
+        public Port(string name, NodeType type, Node node, int socketSize = DEFAULT_SOCKET_SIZE)
         {
-            Name = name;
-            Type = type;
+            this.name = name;
+            this.type = type;
             Background = Brushes.Transparent;
             Grid grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); 
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); 
-            Socket = new Socket(socketSize);
-            Socket.Port = this;
-            button = new Button { Content = "X", Width = 40, Height = 20 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            socket = new Socket(socketSize);
+            socket.port = this;
+            button = new Button { Content = "X", Width = BUTTON_WIDTH, Height = BUTTON_HEIGHT };
             button.Click += (s, e) => {
                 if (parentContainer != null)
                 {
                     parentContainer.stackPanel.Children.Remove(this);
-                    parentContainer.node.Ports.Remove(this);
-                    node.PortsChanged();
+                    parentContainer.node.ports.Remove(this);
+                    parentContainer.node.PortsChanged();
                 }
             };
-            button.Visibility = isRemovable ? Visibility.Visible : Visibility.Collapsed;
+            button.Visibility = Visibility.Collapsed;
             UpdateLabel();
-            if (Type == NodeType.Input)
+            if (type == NodeType.Input)
             {
-                Grid.SetColumn(Socket, 0);
+                Grid.SetColumn(socket, 0);
                 Grid.SetColumn(label, 1);
                 Grid.SetColumn(button, 2);
                 grid.ColumnDefinitions[1].Width = GridLength.Auto;
@@ -119,10 +112,10 @@ namespace XyGraph
             {
                 Grid.SetColumn(button, 0);
                 Grid.SetColumn(label, 1);
-                Grid.SetColumn(Socket, 2);
+                Grid.SetColumn(socket, 2);
             }
             grid.Children.Add(button);
-            grid.Children.Add(Socket);
+            grid.Children.Add(socket);
             grid.Children.Add(label);
             Child = grid;
         }

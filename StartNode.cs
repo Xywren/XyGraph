@@ -7,17 +7,18 @@ namespace XyGraph
 {
     public class StartNode : Border
     {
-        public Port Port { get; private set; }
+        public Port port { get; private set; }
         private Graph graph;
 
         public StartNode(Graph graph)
         {
             this.graph = graph;
-            Port = new Port("", NodeType.Output, null, 20);
-            Port.IsEditable = false;
-            Port.IsRemovable = false;
-            Port.Socket.Background = Brushes.Black;
-            Child = Port;
+            Port port = new Port("", NodeType.Output, null, 20);
+            port.isEditable = false;
+            port.isRemovable = false;
+            port.socket.Background = Brushes.Black;
+            Child = port;
+            this.port = port;
             ContextMenu = new ContextMenu();
             MenuItem deleteItem = new MenuItem { Header = "Delete Start Node" };
             deleteItem.Click += (s, e) => this.Delete();
@@ -26,8 +27,8 @@ namespace XyGraph
 
         public void Delete()
         {
-            var edgesToRemove = graph.edges.Where(edge => Port == edge.FromPort || Port == edge.ToPort).ToList();
-            foreach (var edge in edgesToRemove)
+            List<Edge> edgesToRemove = graph.edges.Where(edge => port == edge.fromPort || port == edge.toPort).ToList();
+            foreach (Edge edge in edgesToRemove)
             {
                 edge.Delete();
             }

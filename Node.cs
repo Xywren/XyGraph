@@ -3,7 +3,6 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Xml.Linq;
 
 namespace XyGraph
 {
@@ -13,16 +12,27 @@ namespace XyGraph
         public const double MIN_NODE_HEIGHT = 100;
         private const int CORNER_RADIUS = 10;
         private Grid grid;
-        public List<Port> Ports = new List<Port>();
+        public List<Port> ports = new List<Port>();
 
-        public NodeContainer TitleContainer { get; private set; }
-        public NodeContainer InputContainer { get; private set; }
-        public NodeContainer OutputContainer { get; private set; }
-        public NodeContainer TopContainer { get; private set; }
-        public NodeContainer MainContainer { get; private set; }
-        public NodeContainer BottomContainer { get; private set; }
+        public NodeContainer titleContainer { get; private set; }
+        public NodeContainer inputContainer { get; private set; }
+        public NodeContainer outputContainer { get; private set; }
+        public NodeContainer topContainer { get; private set; }
+        public NodeContainer mainContainer { get; private set; }
+        public NodeContainer bottomContainer { get; private set; }
 
         public Graph graph;
+
+        public string title 
+        { 
+            get;
+            set 
+            { 
+                if (titleTextBlock != null) titleTextBlock.Text = value; 
+            } 
+        } = "Title";
+
+        private TextBlock titleTextBlock;
 
         public Node(Graph graph)
         {
@@ -35,6 +45,11 @@ namespace XyGraph
             MenuItem deleteItem = new MenuItem { Header = "Delete Node" };
             deleteItem.Click += (s, e) => this.Delete();
             ContextMenu.Items.Add(deleteItem);
+
+            // Add default title
+            titleTextBlock = new TextBlock { Text = title, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
+            titleContainer.Add(titleTextBlock);
+            titleContainer.Visibility = Visibility.Visible;
         }
 
         private Grid CreateContent()
@@ -53,43 +68,43 @@ namespace XyGraph
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Bottom
 
             // Title container
-            TitleContainer = new NodeContainer(this, Brushes.DarkSlateGray);
-            Grid.SetRow(TitleContainer, 0);
-            Grid.SetColumn(TitleContainer, 0);
-            Grid.SetColumnSpan(TitleContainer, 3);
-            grid.Children.Add(TitleContainer);
-            TitleContainer.CornerRadius = new CornerRadius(CORNER_RADIUS, CORNER_RADIUS, 0, 0);
+            titleContainer = new NodeContainer(this, Brushes.DarkSlateGray);
+            Grid.SetRow(titleContainer, 0);
+            Grid.SetColumn(titleContainer, 0);
+            Grid.SetColumnSpan(titleContainer, 3);
+            grid.Children.Add(titleContainer);
+            titleContainer.CornerRadius = new CornerRadius(CORNER_RADIUS, CORNER_RADIUS, 0, 0);
 
             // Top container
-            TopContainer = new NodeContainer(this, Brushes.DimGray);
-            Grid.SetRow(TopContainer, 1);
-            Grid.SetColumn(TopContainer, 0);
-            Grid.SetColumnSpan(TopContainer, 3);
-            grid.Children.Add(TopContainer);
+            topContainer = new NodeContainer(this, Brushes.DimGray);
+            Grid.SetRow(topContainer, 1);
+            Grid.SetColumn(topContainer, 0);
+            Grid.SetColumnSpan(topContainer, 3);
+            grid.Children.Add(topContainer);
 
             // Middle row containers
-            InputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Vertical, HorizontalAlignment.Left);
-            Grid.SetRow(InputContainer, 2);
-            Grid.SetColumn(InputContainer, 0);
-            grid.Children.Add(InputContainer);
+            inputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Vertical, HorizontalAlignment.Left);
+            Grid.SetRow(inputContainer, 2);
+            Grid.SetColumn(inputContainer, 0);
+            grid.Children.Add(inputContainer);
 
-            MainContainer = new NodeContainer(this, Brushes.DarkGray);
-            Grid.SetRow(MainContainer, 2);
-            Grid.SetColumn(MainContainer, 1);
-            grid.Children.Add(MainContainer);
+            mainContainer = new NodeContainer(this, Brushes.DarkGray);
+            Grid.SetRow(mainContainer, 2);
+            Grid.SetColumn(mainContainer, 1);
+            grid.Children.Add(mainContainer);
 
-            OutputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Vertical, HorizontalAlignment.Right);
-            Grid.SetRow(OutputContainer, 2);
-            Grid.SetColumn(OutputContainer, 2);
-            grid.Children.Add(OutputContainer);
+            outputContainer = new NodeContainer(this, Brushes.Gray, Orientation.Vertical, HorizontalAlignment.Right);
+            Grid.SetRow(outputContainer, 2);
+            Grid.SetColumn(outputContainer, 2);
+            grid.Children.Add(outputContainer);
 
             // Bottom container
-            BottomContainer = new NodeContainer(this, Brushes.DimGray);
-            Grid.SetRow(BottomContainer, 3);
-            Grid.SetColumn(BottomContainer, 0);
-            Grid.SetColumnSpan(BottomContainer, 3);
-            grid.Children.Add(BottomContainer);
-            BottomContainer.CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS);
+            bottomContainer = new NodeContainer(this, Brushes.DimGray);
+            Grid.SetRow(bottomContainer, 3);
+            Grid.SetColumn(bottomContainer, 0);
+            Grid.SetColumnSpan(bottomContainer, 3);
+            grid.Children.Add(bottomContainer);
+            bottomContainer.CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS);
 
             return grid;
         }
@@ -97,27 +112,27 @@ namespace XyGraph
         public void PortsChanged()
         {
             // if more than 1 output port, make all output port labels editable
-            if (Ports.Where(p => p.Type == NodeType.Output).Count() >= 2)
+            if (ports.Where(p => p.type == NodeType.Output).Count() >= 2)
             {
-                foreach (Port p in Ports)
+                foreach (Port p in ports)
                 {
-                    if (p.Type == NodeType.Output)
+                    if (p.type == NodeType.Output)
                     {
-                        p.IsEditable = true;
-                        p.IsRemovable = true;
+                        p.isEditable = true;
+                        p.isRemovable = true;
                     }
                 }
             }
 
             // if only 1 output port, make all output port labels uneditable
-            else if (Ports.Where(p => p.Type == NodeType.Output).Count() == 1)
+            else if (ports.Where(p => p.type == NodeType.Output).Count() == 1)
             {
-                foreach (Port p in Ports)
+                foreach (Port p in ports)
                 {
-                    if (p.Type == NodeType.Output)
+                    if (p.type == NodeType.Output)
                     {
-                        p.IsEditable = false;
-                        p.IsRemovable = false;
+                        p.isEditable = false;
+                        p.isRemovable = false;
                     }
                 }
             }
@@ -125,7 +140,7 @@ namespace XyGraph
 
         public void Delete()
         {
-            List<Edge> edgesToRemove = graph.edges.Where(edge => this.Ports.Contains(edge.FromPort) || this.Ports.Contains(edge.ToPort)).ToList();
+            List<Edge> edgesToRemove = graph.edges.Where(edge => this.ports.Contains(edge.fromPort) || this.ports.Contains(edge.toPort)).ToList();
             foreach (Edge edge in edgesToRemove)
             {
                 edge.Delete();

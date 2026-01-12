@@ -14,7 +14,7 @@ namespace XyGraph
 
         private GraphState currentState = GraphState.None;
         private Point lastMousePos;
-        private Point nodeCreatePos;
+        public Point nodeCreatePos;
         private UIElement draggedNode;
         private Point dragStartPos;
         private Port edgeStartPort;
@@ -30,10 +30,10 @@ namespace XyGraph
         private const double NODE_OFFSET_Y = 50;
         private const double SNAP_DISTANCE = 25;
 
-        public StartNode startNode;
-        public EndNode endNode;
-        internal MenuItem startItem; 
-        internal MenuItem endItem;
+        public StartNode startNode { get; internal set; }
+        public EndNode endNode { get; internal set; }
+        internal MenuItem startItem { get; private set; }
+        internal MenuItem endItem { get; private set; }
 
         public Graph()
         {
@@ -69,25 +69,24 @@ namespace XyGraph
             Canvas.SetLeft(node, nodeCreatePos.X - NODE_OFFSET_X);
             Canvas.SetTop(node, nodeCreatePos.Y - NODE_OFFSET_Y);
             Children.Add(node);
-            node.TitleContainer.Add(new TextBlock { Text = "Title", Foreground = Brushes.White });
-            node.TitleContainer.Visibility = Visibility.Visible;
-            node.TopContainer.Add(new TextBlock { Text = "Top", Foreground = Brushes.White });
+            
+            node.topContainer.Add(new TextBlock { Text = "Top", Foreground = Brushes.White });
             Port inputPort = new Port("Input", NodeType.Input, node);
 
             // output
             Port outputPort = new Port("Output", NodeType.Output, node);
-            node.InputContainer.Add(inputPort);
+            node.inputContainer.Add(inputPort);
             Button addOutputButton = new Button { Content = "Add Output", FontSize = 8, Height = 20 };
             addOutputButton.Click += (s, e) => {
                 Port newPort = new Port("New Output", NodeType.Output, node);
-                node.OutputContainer.Add(newPort);
+                node.outputContainer.Add(newPort);
             };
 
-            node.OutputContainer.Add(addOutputButton);
-            node.OutputContainer.Add(outputPort);
+            node.outputContainer.Add(addOutputButton);
+            node.outputContainer.Add(outputPort);
 
-            node.MainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
-            node.BottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });
+            node.mainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
+            node.bottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });
         }
 
         private void AddStartNode()
@@ -142,7 +141,7 @@ namespace XyGraph
         {
             if(e.Source is Socket && currentState == GraphState.None)
             {
-                Port port = (e.Source as Socket).Port;
+                Port port = (e.Source as Socket).port;
                 edgeStartPort = port;
                 currentState = GraphState.CreatingEdge;
                 tempConnectionLine = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false };
@@ -173,8 +172,8 @@ namespace XyGraph
             if (currentState == GraphState.CreatingEdge)
             {
                 Point mousePos = e.GetPosition(this);
-                int startOffset = edgeStartPort.Socket.Size / 2;
-                Point startPos = edgeStartPort.Socket.TranslatePoint(new Point(startOffset, startOffset), this);
+                int startOffset = edgeStartPort.socket.size / 2;
+                Point startPos = edgeStartPort.socket.TranslatePoint(new Point(startOffset, startOffset), this);
                 tempConnectionLine.X1 = startPos.X;
                 tempConnectionLine.Y1 = startPos.Y;
                 Point snapPos = mousePos;
@@ -182,12 +181,12 @@ namespace XyGraph
                 double minDist = SNAP_DISTANCE;
                 foreach (Node n in nodes)
                 {
-                    foreach (Port p in n.Ports)
+                    foreach (Port p in n.ports)
                     {
-                        if (p != edgeStartPort && p.Type != edgeStartPort.Type)
+                        if (p != edgeStartPort && p.type != edgeStartPort.type)
                         {
-                            int endOffset = p.Socket.Size / 2;
-                            Point portPos = p.Socket.TranslatePoint(new Point(endOffset, endOffset), this);
+                            int endOffset = p.socket.size / 2;
+                            Point portPos = p.socket.TranslatePoint(new Point(endOffset, endOffset), this);
                             double dist = (mousePos - portPos).Length;
                             if (dist < minDist)
                             {
@@ -198,26 +197,26 @@ namespace XyGraph
                         }
                     }
                 }
-                if (startNode != null && startNode.Port != edgeStartPort)
+                if (startNode != null && startNode.port != edgeStartPort)
                 {
-                    Point portPos = startNode.Port.Socket.TranslatePoint(new Point(10, 10), this);
+                    Point portPos = startNode.port.socket.TranslatePoint(new Point(10, 10), this);
                     double dist = (mousePos - portPos).Length;
                     if (dist < minDist)
                     {
                         minDist = dist;
                         snapPos = portPos;
-                        targetPort = startNode.Port;
+                        targetPort = startNode.port;
                     }
                 }
-                if (endNode != null && endNode.Port != edgeStartPort)
+                if (endNode != null && endNode.port != edgeStartPort)
                 {
-                    Point portPos = endNode.Port.Socket.TranslatePoint(new Point(10, 10), this);
+                    Point portPos = endNode.port.socket.TranslatePoint(new Point(10, 10), this);
                     double dist = (mousePos - portPos).Length;
                     if (dist < minDist)
                     {
                         minDist = dist;
                         snapPos = portPos;
-                        targetPort = endNode.Port;
+                        targetPort = endNode.port;
                     }
                 }
                 tempConnectionLine.X2 = snapPos.X;
@@ -280,9 +279,15 @@ namespace XyGraph
 
         private void CreateEdge(Port from, Port to)
         {
+            // Check if an edge already exists between these ports (bi-directional)
+            if (edges.Any(edge => (edge.fromPort == from && edge.toPort == to) || (edge.fromPort == to && edge.toPort == from)))
+            {
+                return;
+            }
+
             Edge conn = new Edge(this, from, to);
             conn.UpdatePosition(this);
-            Children.Add(conn.Visual);
+            Children.Add(conn.visual);
             edges.Add(conn);
         }
 

@@ -7,8 +7,8 @@ namespace XyGraph
 {
     public class NodeContainer : Border
     {
-        public StackPanel stackPanel;
-        public Node node;
+        public StackPanel stackPanel { get; private set; }
+        public Node node { get; private set; }
 
         public NodeContainer(Node node, Brush background, Orientation orientation = Orientation.Vertical, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Left)
         {
@@ -28,7 +28,7 @@ namespace XyGraph
             Visibility = Visibility.Visible;
             if (child is Port port)
             {
-                node.Ports.Add(port);
+                node.ports.Add(port);
                 node.PortsChanged();
                 port.parentContainer = this;
             }

@@ -7,15 +7,15 @@ namespace XyGraph
 {
     public class EndNode : Border
     {
-        public Port Port { get; private set; }
+        public Port port { get; private set; }
         private Graph graph;
 
         public EndNode(Graph graph)
         {
             this.graph = graph;
-            Port = new Port("", NodeType.Input, null, 20);
-            Port.IsEditable = false;
-            Port.IsRemovable = false;
+            Port port = new Port("", NodeType.Input, null, 20);
+            port.isEditable = false;
+            port.isRemovable = false;
             Border outline = new Border
             {
                 Width = 28,
@@ -24,9 +24,10 @@ namespace XyGraph
                 BorderThickness = new Thickness(2),
                 CornerRadius = new CornerRadius(12)
             };
-            Grid g = Port.Child as Grid;
+            Grid g = port.Child as Grid;
             g.Children.Add(outline);
-            Child = Port;
+            Child = port;
+            this.port = port;
             ContextMenu = new ContextMenu();
             MenuItem deleteItem = new MenuItem { Header = "Delete End Node" };
             deleteItem.Click += (s, e) => this.Delete();
@@ -35,7 +36,7 @@ namespace XyGraph
 
         public void Delete()
         {
-            var edgesToRemove = graph.edges.Where(edge => Port == edge.FromPort || Port == edge.ToPort).ToList();
+            var edgesToRemove = graph.edges.Where(edge => port == edge.fromPort || port == edge.toPort).ToList();
             foreach (var edge in edgesToRemove)
             {
                 edge.Delete();
