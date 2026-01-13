@@ -4,6 +4,8 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Globalization;
+using System.Text.Json.Nodes;
 
 namespace XyGraph
 {
@@ -16,6 +18,7 @@ namespace XyGraph
         private const int CORNER_RADIUS = 10;
         private Grid grid;
         public List<Port> ports = new List<Port>();
+        protected virtual string Type => GetType().Name;
 
         public NodeContainer titleContainer { get; private set; }
         public NodeContainer inputContainer { get; private set; }
@@ -44,21 +47,7 @@ namespace XyGraph
             this.graph = graph;
             Background = Brushes.DarkGray;
             CornerRadius = new CornerRadius(CORNER_RADIUS);
-            grid = CreateContent();
-            Child = grid;
-            ContextMenu = new ContextMenu();
-            MenuItem deleteItem = new MenuItem { Header = "Delete Node" };
-            deleteItem.Click += (s, e) => this.Delete();
-            ContextMenu.Items.Add(deleteItem);
 
-            // Add default title
-            titleTextBlock = new TextBlock { Text = title, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
-            titleContainer.Add(titleTextBlock);
-            titleContainer.Visibility = Visibility.Visible;
-        }
-
-        private Grid CreateContent()
-        {
             Grid grid = new Grid();
 
             // Column definitions
@@ -111,7 +100,15 @@ namespace XyGraph
             grid.Children.Add(bottomContainer);
             bottomContainer.CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS);
 
-            return grid;
+            Child = grid;
+            ContextMenu = new ContextMenu();
+            MenuItem deleteItem = new MenuItem { Header = "Delete Node" };
+            deleteItem.Click += (s, e) => this.Delete();
+            ContextMenu.Items.Add(deleteItem);
+
+            titleTextBlock = new TextBlock { Text = title, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
+            titleContainer.Add(titleTextBlock);
+            titleContainer.Visibility = Visibility.Visible;
         }
 
         public void PortsChanged()
@@ -174,6 +171,39 @@ namespace XyGraph
             {
                 e.UpdatePosition();
             }
+        }
+
+
+        public virtual JsonObject Save()
+        {
+            double x = Canvas.GetLeft(this);
+            double y = Canvas.GetTop(this);
+            if (double.IsNaN(x)) x = 0;
+            if (double.IsNaN(y)) y = 0;
+
+            var obj = new JsonObject
+            {
+                ["type"] = Type,
+                ["schemaVersion"] = 1,
+                ["id"] = guid.ToString(),
+                ["x"] = x,
+                ["y"] = y
+            };
+
+            return obj;
+        }
+
+        public virtual void Load(JsonObject obj)
+        {
+            if (obj == null) throw new ArgumentNullException(nameof(obj));
+
+            guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? guid.ToString());
+
+            double x = obj["x"]?.GetValue<double>() ?? 0.0;
+            Canvas.SetLeft(this, x);
+
+            double y = obj["y"]?.GetValue<double>() ?? 0.0;
+            Canvas.SetTop(this, y);
         }
     }
 }
