@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Text.Json.Nodes;
 
 namespace XyGraph
 {
@@ -154,6 +155,40 @@ namespace XyGraph
 
                 parentContainer.Remove(this);
             }
+        }
+
+        // Serialization
+        public JsonObject Save()
+        {
+            var obj = new JsonObject
+            {
+                ["id"] = guid.ToString(),
+                ["name"] = name ?? string.Empty,
+                ["portType"] = type.ToString(),
+                ["connectionType"] = connectionType.ToString()
+            };
+
+            return obj;
+        }
+
+        public static Port Load(JsonObject obj, Node node)
+        {
+            if (obj == null) throw new ArgumentNullException(nameof(obj));
+
+            string name = obj["name"]?.GetValue<string>() ?? string.Empty;
+            PortType pType = Enum.Parse<PortType>(obj["portType"]?.GetValue<string>() ?? PortType.Input.ToString());
+
+            // create port with name and type
+            Port p = new Port(name, pType, node);
+
+            // restore GUID and connection type
+            p.guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? p.guid.ToString());
+            p.connectionType = Enum.Parse<ConnectionType>(obj["connectionType"]?.GetValue<string>() ?? p.connectionType.ToString());
+
+            // refresh label to reflect loaded name/type
+            p.UpdateLabel(p.isEditable);
+
+            return p;
         }
     }
 }

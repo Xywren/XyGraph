@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Text.Json.Nodes;
 
 namespace XyGraph
 {
@@ -83,6 +84,45 @@ namespace XyGraph
         {
             graph.Children.Remove(visual);
             graph.edges.Remove(this);
+        }
+
+        // Serialization
+        public JsonObject Save()
+        {
+            var obj = new JsonObject
+            {
+                ["id"] = guid.ToString(),
+                ["from"] = fromPort?.guid.ToString() ?? string.Empty,
+                ["to"] = toPort?.guid.ToString() ?? string.Empty,
+                ["style"] = style.ToString()
+            };
+
+            return obj;
+        }
+
+        // Make sure you load all nodes before attempting to load edges
+        public static Edge Load(JsonObject obj, Graph graph)
+        {
+            if (obj == null) throw new ArgumentNullException(nameof(obj));
+            if (graph == null) throw new ArgumentNullException(nameof(graph));
+
+            Guid id = Guid.Parse(obj["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString());
+            Guid fromId = Guid.Parse(obj["from"]?.GetValue<string>() ?? Guid.Empty.ToString());
+            Guid toId = Guid.Parse(obj["to"]?.GetValue<string>() ?? Guid.Empty.ToString());
+
+            Port fromPort = graph.GetPortById(fromId);
+            Port toPort = graph.GetPortById(toId);
+            if (fromPort == null || toPort == null) throw new Exception("Port could not be found! maek sure you load all nodes before loading any edges");
+
+            Edge e = graph.CreateEdge(fromPort, toPort);
+            if (e == null) return null;
+
+            e.guid = id;
+            e.style = Enum.Parse<EdgeStyle>(obj["style"]?.GetValue<string>() ?? e.style.ToString());
+
+            e.UpdatePosition();
+
+            return e;
         }
     }
 }

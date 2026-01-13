@@ -254,20 +254,45 @@ namespace XyGraph
             }
         }
 
-        private void CreateEdge(Port from, Port to)
+        public Edge CreateEdge(Port from, Port to)
         {
             // Check if an edge already exists between these ports (bi-directional)
             if (edges.Any(edge => (edge.fromPort == from && edge.toPort == to) || (edge.fromPort == to && edge.toPort == from)))
             {
-                return;
+                return null;
             }
 
-            Edge conn = new Edge(this, from, to);
-            conn.UpdatePosition();
-            Children.Add(conn.visual);
-            edges.Add(conn);
+            Edge edge = new Edge(this, from, to);
+            edge.UpdatePosition();
+            Children.Add(edge.visual);
+            edges.Add(edge);
+
+            return edge;
         }
 
+        // performs a search for a port by its GUID
+        // this can be expensive so get a port by it's node when known
+        public Port GetPortById(Guid id)
+        {
+            // start and end nodes dont actually count as nodes
+            // so they wont get caught by the below for loop
+            // check these first to speed up search on smaller graphs
+            if (startNode != null && startNode.port.guid == id) return startNode.port;
+            if (endNode != null && endNode.port.guid == id) return endNode.port;
+
+            // loop through all nodes in graph
+            foreach (Node node in nodes)
+            {
+                foreach (Port p in node.ports)
+                {
+                    if (p.guid == id) return p;
+                }
+            }
+
+            return null;
+        }
+
+        // draws the grid background
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);

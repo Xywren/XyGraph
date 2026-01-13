@@ -190,9 +190,21 @@ namespace XyGraph
                 ["y"] = y
             };
 
+            // include ports in node JSON
+            JsonArray portsArray = new JsonArray();
+            foreach (Port port in ports)
+            {
+                portsArray.Add(port.Save());
+            }
+            obj["ports"] = portsArray;
+
             return obj;
         }
 
+        // due to inheritence
+        // (derived classes must override this funcion to load in their own custom properties)
+        // we cannot use a static load Function like the other Load functions.
+        // in this instance, you must create a dummy instance of the Node's type and then call Load() on it
         public virtual void Load(JsonObject obj)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
@@ -204,6 +216,25 @@ namespace XyGraph
 
             double y = obj["y"]?.GetValue<double>() ?? 0.0;
             Canvas.SetTop(this, y);
+
+            // load ports if present
+            JsonArray portsArray = obj["ports"] as JsonArray;
+            if (portsArray != null)
+            {
+                foreach (JsonNode? item in portsArray)
+                {
+                    JsonObject portObj = item as JsonObject;
+                    if (portObj == null) continue;
+
+                    // create port via static loader
+                    Port p = Port.Load(portObj, this);
+
+                    if (p.type == PortType.Input)
+                        inputContainer.Add(p);
+                    else
+                        outputContainer.Add(p);
+                }
+            }
         }
     }
 }
