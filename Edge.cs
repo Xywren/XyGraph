@@ -86,7 +86,6 @@ namespace XyGraph
             graph.edges.Remove(this);
         }
 
-        // Serialization
         public JsonObject Save()
         {
             var obj = new JsonObject

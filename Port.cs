@@ -157,7 +157,7 @@ namespace XyGraph
             }
         }
 
-        // Serialization
+        //
         public JsonObject Save()
         {
             var obj = new JsonObject
@@ -171,6 +171,7 @@ namespace XyGraph
             return obj;
         }
 
+        // used whem loading a port from Json. this will create a Port instance and return it when all data is loaded into it
         public static Port Load(JsonObject obj, Node node)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
@@ -185,7 +186,7 @@ namespace XyGraph
             p.guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? p.guid.ToString());
             p.connectionType = Enum.Parse<ConnectionType>(obj["connectionType"]?.GetValue<string>() ?? p.connectionType.ToString());
 
-            // refresh label to reflect loaded name/type
+            // refresh label to reflect loaded name
             p.UpdateLabel(p.isEditable);
 
             return p;

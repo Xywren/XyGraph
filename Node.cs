@@ -29,6 +29,10 @@ namespace XyGraph
 
         public Graph graph;
 
+
+        public double SpawnOffsetX = 75;
+        public double SpawnOffsetY = 50;
+
         public string title 
         { 
             get;
@@ -190,7 +194,7 @@ namespace XyGraph
                 ["y"] = y
             };
 
-            // include ports in node JSON
+            // loop through all ports that belong to this node and save them
             JsonArray portsArray = new JsonArray();
             foreach (Port port in ports)
             {
@@ -217,7 +221,7 @@ namespace XyGraph
             double y = obj["y"]?.GetValue<double>() ?? 0.0;
             Canvas.SetTop(this, y);
 
-            // load ports if present
+            // load ports that belong to this node
             JsonArray portsArray = obj["ports"] as JsonArray;
             if (portsArray != null)
             {

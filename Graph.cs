@@ -1,10 +1,13 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Xml.Linq;
 
 namespace XyGraph
 {
@@ -19,8 +22,8 @@ namespace XyGraph
         private Point dragStartPos;
         private Port edgeStartPort;
         private Line tempConnectionLine;
-        public List<Edge> edges = new List<Edge>();
-        public List<Node> nodes = new List<Node>();
+        public List<Edge> edges { get; internal set; } = new List<Edge>();
+        public List<Node> nodes { get; internal set; } = new List<Node>();
         private Port targetPort;
 
         private const double ZOOM_FACTOR = 1.1;
@@ -70,6 +73,7 @@ namespace XyGraph
             }
         }
 
+
         private void AddEndNode()
         {
             if (endNode == null)
@@ -80,6 +84,14 @@ namespace XyGraph
                 Children.Add(endNode);
                 endItem.IsEnabled = false;
             }
+        }
+        public void AddNode(Node n, double posX = 0, double posY = 0)
+        {
+
+            Canvas.SetLeft(n, posX);
+            Canvas.SetTop(n, posY);
+            nodes.Add(n);
+            Children.Add(n);
         }
 
         private void OnMouseWheel(object sender, MouseWheelEventArgs e)
@@ -262,12 +274,12 @@ namespace XyGraph
                 return null;
             }
 
-            Edge edge = new Edge(this, from, to);
-            edge.UpdatePosition();
-            Children.Add(edge.visual);
-            edges.Add(edge);
+            Edge conn = new Edge(this, from, to);
+            conn.UpdatePosition();
+            Children.Add(conn.visual);
+            edges.Add(conn);
 
-            return edge;
+            return conn;
         }
 
         // performs a search for a port by its GUID
@@ -292,6 +304,131 @@ namespace XyGraph
             return null;
         }
 
+        // clears graph of nodes and edges
+        public void Clear()
+        {
+            while(nodes.Count >0)
+                nodes[0].Delete();
+
+            // we shouldne need to delete edges here,
+            // deleting the nodes should also delete any edges they were connected to
+
+            // delete start/end nodes
+            if (startNode != null)
+            {
+                startNode.Delete();
+                startNode = null;
+            }
+            if (endNode != null)
+            {
+                endNode.Delete();
+                endNode = null;
+            }
+
+
+            // we shouldnt need to clear the lists here, they should already be cleared by this point
+            // i prefer to manage these elements properly instead doing of "just in case" code
+        }
+
+        // save graph into a JsonObject (nodes include their ports)
+        public JsonObject Save()
+        {
+            JsonObject obj = new JsonObject
+            {
+                ["schemaVersion"] = 1
+            };
+
+            JsonArray nodesArray = new JsonArray();
+            foreach (Node n in nodes)
+            {
+                nodesArray.Add(n.Save());
+            }
+
+            obj["nodes"] = nodesArray;
+
+            JsonArray edgesArray = new JsonArray();
+            foreach (Edge e in edges)
+            {
+                edgesArray.Add(e.Save());
+            }
+            obj["edges"] = edgesArray;
+
+            return obj;
+        }
+
+        // load graph from JsonObject into this graph (non-static)
+        public void Load(JsonObject obj)
+        {
+            if (obj == null) throw new ArgumentNullException(nameof(obj));
+
+            // clear existing graph
+            Clear();
+
+            // load nodes first
+            JsonArray nodesArray = obj["nodes"] as JsonArray;
+            if (nodesArray != null)
+            {
+                foreach (JsonNode? item in nodesArray)
+                {
+                    JsonObject nodeObj = item as JsonObject;
+                    if (nodeObj == null) continue;
+
+                    string typeStr = nodeObj["type"]?.GetValue<string>() ?? "Node";
+
+                    Node n = CreateNodeByType(typeStr);
+
+                    // ensure node is part of this graph if ctor didn't add
+                    if (!nodes.Contains(n))
+                    {
+                        nodes.Add(n);
+                        Children.Add(n);
+                    }
+
+                    n.Load(nodeObj);
+                    AddNode(n, Canvas.GetLeft(n), Canvas.GetBottom(n));
+                }
+            }
+
+            // then load edges
+            JsonArray edgesArray = obj["edges"] as JsonArray;
+            if (edgesArray != null)
+            {
+                foreach (JsonNode? item in edgesArray)
+                {
+                    JsonObject edgeObj = item as JsonObject;
+                    if (edgeObj == null) continue;
+
+                    Edge.Load(edgeObj, this);
+                }
+            }
+        }
+
+        // will return an instance of the type, casted to a Node
+        private Node CreateNodeByType(string typeName)
+        {
+            // Note: this will only find and use constructors that accept a single Graph parameter.
+            if (string.IsNullOrEmpty(typeName))
+                return new Node(this);
+
+            // get all currently loaded derivatives of type Node
+            List<Type> nodeDerivatives = GetDerivatives(typeof(Node));
+
+            // find a type with the matching simple name (e.g. "ThreadNode")
+            Type matched = nodeDerivatives.FirstOrDefault(t => t.Name == typeName);
+
+            if (matched != null)
+            {
+                var ctor = matched.GetConstructor(new System.Type[] { typeof(Graph) });
+                if (ctor != null)
+                {
+                    return (Node)ctor.Invoke(new object[] { this });
+                }
+            }
+
+            // fallback to base Node
+            return new Node(this);
+        }
+
         // draws the grid background
         protected override void OnRender(DrawingContext dc)
         {
@@ -305,6 +442,44 @@ namespace XyGraph
             {
                 dc.DrawLine(pen, new Point(0, y), new Point(ActualWidth, y));
             }
+        }
+
+        public static List<Type> GetDerivatives(Type baseType)
+        {
+            if (baseType == null)
+                throw new ArgumentNullException(nameof(baseType));
+
+            var result = new List<Type>();
+
+            // Look through all loaded assemblies
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+
+                try
+                {
+                    types = assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException e)
+                {
+                    types = e.Types.Where(t => t != null).ToArray();
+                }
+
+                foreach (var t in types)
+                {
+                    if (t == null)
+                        continue;
+
+                    // Skip the base type itself and abstract types if you only want concrete
+                    if (t == baseType)
+                        continue;
+
+                    if (baseType.IsAssignableFrom(t))
+                        result.Add(t);
+                }
+            }
+
+            return result;
         }
     }
 }

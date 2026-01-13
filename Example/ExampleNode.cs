@@ -11,14 +11,15 @@ namespace XyGraph
 
         private TextBox exampleProperty;
 
-        public ExampleNode(Graph graph, Point rightClickPos) : base(graph)
-        {
-            title = "Example Node";
 
-            double SpawnOffsetX = 75;
-            double SpawnOffsetY = 50;
-            Canvas.SetLeft(this, rightClickPos.X - SpawnOffsetX);
-            Canvas.SetTop(this, rightClickPos.Y - SpawnOffsetY);
+
+        public ExampleNode(Graph graph) : base(graph)
+        {
+            //overriden properties
+            title = "Example Node";
+            SpawnOffsetX = 75;
+            SpawnOffsetY = 50;
+
 
 
             exampleProperty = new TextBox { Text = title, Margin = new Thickness(2), MinWidth = 120 };
@@ -45,8 +46,6 @@ namespace XyGraph
             bottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });
 
 
-            graph.nodes.Add(this);
-            graph.Children.Add(this);
         }
 
 
