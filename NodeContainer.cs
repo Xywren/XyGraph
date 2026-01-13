@@ -7,7 +7,7 @@ namespace XyGraph
 {
     public class NodeContainer : Border
     {
-        public StackPanel stackPanel { get; private set; }
+        private StackPanel stackPanel { get;  set; }
         public Node node { get; private set; }
 
         public NodeContainer(Node node, Brush background, Orientation orientation = Orientation.Vertical, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Left)
@@ -40,6 +40,23 @@ namespace XyGraph
                 node.ports.Add(port);
                 node.PortsChanged();
                 port.parentContainer = this;
+            }
+        }
+
+        public void Remove(UIElement child)
+        {
+            stackPanel.Children.Remove(child);
+
+            if (child is Port port)
+            {
+                node.ports.Remove(port);
+                node.PortsChanged();
+            }
+
+            // if no more chldren, hide container
+            if (stackPanel.Children.Count == 0)
+            {
+                Visibility = Visibility.Collapsed;
             }
         }
     }

@@ -28,7 +28,7 @@ namespace XyGraph
         public Guid guid;
 
         private const int DEFAULT_SOCKET_SIZE = 10;
-        private const int BUTTON_WIDTH = 40;
+        private const int BUTTON_WIDTH = 20;
         private const int BUTTON_HEIGHT = 20;
 
         public PortType type; // is this an input or output port?
@@ -152,9 +152,7 @@ namespace XyGraph
                     edge.Delete();
                 }
 
-                parentContainer.stackPanel.Children.Remove(this);
-                parentContainer.node.ports.Remove(this);
-                parentContainer.node.PortsChanged();
+                parentContainer.Remove(this);
             }
         }
     }
