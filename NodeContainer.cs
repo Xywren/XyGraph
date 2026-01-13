@@ -19,7 +19,8 @@ namespace XyGraph
             Visibility = Visibility.Collapsed;
             MinHeight = Node.MIN_NODE_HEIGHT / 4;
             MinWidth = Node.MIN_NODE_WIDTH / 3;
-            Padding = new Thickness(5);
+            Padding = new Thickness(5); // stops content from touching edges
+            Margin = new Thickness(-1); // stops 1 pixel pink gaps between containers
 
             this.SizeChanged += (s, e) => OnResize();
         }

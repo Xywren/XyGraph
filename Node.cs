@@ -45,15 +45,15 @@ namespace XyGraph
             guid = Guid.NewGuid();
 
             this.graph = graph;
-            Background = Brushes.DarkGray;
+            Background = Brushes.Magenta;
             CornerRadius = new CornerRadius(CORNER_RADIUS);
 
             Grid grid = new Grid();
 
             // Column definitions
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             // Row definitions
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Title
