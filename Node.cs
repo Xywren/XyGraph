@@ -221,6 +221,13 @@ namespace XyGraph
             double y = obj["y"]?.GetValue<double>() ?? 0.0;
             Canvas.SetTop(this, y);
 
+            // remove any existing ports to avoid duplicates when re-loading
+            while (ports.Count > 0)
+            {
+                // Port.Delete will remove the visual from its parent container and remove it from this.ports
+                ports[0].Delete();
+            }
+
             // load ports that belong to this node
             JsonArray portsArray = obj["ports"] as JsonArray;
             if (portsArray != null)

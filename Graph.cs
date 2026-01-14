@@ -338,6 +338,30 @@ namespace XyGraph
                 ["schemaVersion"] = 1
             };
 
+            // Save start node first
+            if (startNode != null)
+            {
+                JsonObject startObj = new JsonObject
+                {
+                    ["portId"] = startNode.port?.guid.ToString() ?? string.Empty,
+                    ["x"] = Canvas.GetLeft(startNode),
+                    ["y"] = Canvas.GetTop(startNode)
+                };
+                obj["startNode"] = startObj;
+            }
+
+            // Save end node next
+            if (endNode != null)
+            {
+                JsonObject endObj = new JsonObject
+                {
+                    ["portId"] = endNode.port?.guid.ToString() ?? string.Empty,
+                    ["x"] = Canvas.GetLeft(endNode),
+                    ["y"] = Canvas.GetTop(endNode)
+                };
+                obj["endNode"] = endObj;
+            }
+
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
             {
@@ -364,6 +388,41 @@ namespace XyGraph
             // clear existing graph
             Clear();
 
+            // load start/end nodes first so their ports are discoverable by GetPortById
+            JsonObject startObj = obj["startNode"] as JsonObject;
+            if (startObj != null)
+            {
+                string portIdStr = startObj["portId"]?.GetValue<string>() ?? string.Empty;
+                double x = startObj["x"]?.GetValue<double>() ?? 0.0;
+                double y = startObj["y"]?.GetValue<double>() ?? 0.0;
+
+                StartNode s = new StartNode(this);
+                if (!string.IsNullOrEmpty(portIdStr) && Guid.TryParse(portIdStr, out Guid pid))
+                    s.port.guid = pid;
+                Canvas.SetLeft(s, x);
+                Canvas.SetTop(s, y);
+                Children.Add(s);
+                startNode = s;
+                startItem.IsEnabled = false;
+            }
+
+            JsonObject endObj = obj["endNode"] as JsonObject;
+            if (endObj != null)
+            {
+                string portIdStr = endObj["portId"]?.GetValue<string>() ?? string.Empty;
+                double x = endObj["x"]?.GetValue<double>() ?? 0.0;
+                double y = endObj["y"]?.GetValue<double>() ?? 0.0;
+
+                EndNode eNode = new EndNode(this);
+                if (!string.IsNullOrEmpty(portIdStr) && Guid.TryParse(portIdStr, out Guid pid))
+                    eNode.port.guid = pid;
+                Canvas.SetLeft(eNode, x);
+                Canvas.SetTop(eNode, y);
+                Children.Add(eNode);
+                endNode = eNode;
+                endItem.IsEnabled = false;
+            }
+
             // load nodes first
             JsonArray nodesArray = obj["nodes"] as JsonArray;
             if (nodesArray != null)
@@ -377,15 +436,8 @@ namespace XyGraph
 
                     Node n = CreateNodeByType(typeStr);
 
-                    // ensure node is part of this graph if ctor didn't add
-                    if (!nodes.Contains(n))
-                    {
-                        nodes.Add(n);
-                        Children.Add(n);
-                    }
-
                     n.Load(nodeObj);
-                    AddNode(n, Canvas.GetLeft(n), Canvas.GetBottom(n));
+                    AddNode(n, Canvas.GetLeft(n), Canvas.GetTop(n));
                 }
             }
 

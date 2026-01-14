@@ -44,23 +44,64 @@ namespace XyGraph
 
         public bool isEditable
         {
-            get;
+            get
+            {
+                // if label is a textbox then port is editable
+                // if label is a textblock then port is not editable
+                if (Child is Grid g)
+                {
+                    foreach (UIElement child in g.Children)
+                    {
+                        if (Grid.GetColumn(child) == 1)
+                            return child is TextBox;
+                    }
+                }
+                return false;
+            }
             set
             {
-                if (isEditable != value)
+                // Find the child occupying column 1 (the label column) and its index in the Grid.
+                // If the current control type (TextBox vs TextBlock) doesn't match the requested state,
+                // replace that element in-place so layout/order is preserved.
+                if (Child is Grid g)
                 {
 
-                    if (Child is Grid g)
+                    // find the grid index of the label (label is always in column 1, but index may differ)
+                    UIElement current = null;
+                    int idx = -1;
+                    for (int i = 0; i < g.Children.Count; i++)
                     {
-                        int idx = g.Children.IndexOf(label);
+                        if (Grid.GetColumn(g.Children[i]) == 1)
+                        {
+                            current = g.Children[i];
+                            idx = i;
+                            break;
+                        }
+                    }
+
+                    if (idx == -1) return;
+
+                    // Determine whether the current visual is editable
+                    bool currentlyEditable = current is TextBox;
+
+                    // Only perform the replacement the the value has changed (not setting IsEditable = true when its already true)
+                    if (currentlyEditable != value)
+                    {
+                        // Remove the existing label
                         g.Children.RemoveAt(idx);
+
+                        //create the new label
                         UpdateLabel(value);
+
+                        // insert the new label in correct position
                         g.Children.Insert(idx, label);
                         Grid.SetColumn(label, 1);
                     }
                 }
             }
         }
+
+
 
         public bool isRemovable
         {
