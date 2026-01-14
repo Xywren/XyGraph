@@ -17,7 +17,7 @@ namespace XyGraph
             stackPanel = new StackPanel { Orientation = orientation, HorizontalAlignment = horizontalAlignment };
             Child = stackPanel;
             Visibility = Visibility.Collapsed;
-            MinHeight = Node.MIN_NODE_HEIGHT / 4;
+            MinHeight = 5;
             MinWidth = Node.MIN_NODE_WIDTH / 3;
             Padding = new Thickness(5); // stops content from touching edges
             Margin = new Thickness(-1); // stops 1 pixel pink gaps between containers

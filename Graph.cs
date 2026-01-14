@@ -36,6 +36,16 @@ namespace XyGraph
         internal MenuItem startItem { get; private set; }
         internal MenuItem endItem { get; private set; }
 
+        public enum GraphStatus
+        {
+            Idle,
+            Running,
+            Completed,
+            Error
+        }
+        public GraphStatus status { get; internal set; } = GraphStatus.Idle;
+        public Node activeNode { get; internal set; }
+
         public Graph()
         {
             Background = Brushes.White;
@@ -69,6 +79,7 @@ namespace XyGraph
                 Canvas.SetLeft(startNode, rightClickPos.X - StartNode.OffsetX);
                 Canvas.SetTop(startNode, rightClickPos.Y - StartNode.OffsetY);
                 Children.Add(startNode);
+                nodes.Add(startNode);
                 startItem.IsEnabled = false;
             }
         }
@@ -82,6 +93,7 @@ namespace XyGraph
                 Canvas.SetLeft(endNode, rightClickPos.X - EndNode.OffsetX);
                 Canvas.SetTop(endNode, rightClickPos.Y - EndNode.OffsetY);
                 Children.Add(endNode);
+                nodes.Add(endNode);
                 endItem.IsEnabled = false;
             }
         }
@@ -178,28 +190,6 @@ namespace XyGraph
                         }
                     }
                 }
-                if (startNode != null && startNode.port != edgeStartPort)
-                {
-                    Point portPos = startNode.port.socket.TranslatePoint(new Point(10, 10), this);
-                    double dist = (mousePos - portPos).Length;
-                    if (dist < minDist)
-                    {
-                        minDist = dist;
-                        snapPos = portPos;
-                        targetPort = startNode.port;
-                    }
-                }
-                if (endNode != null && endNode.port != edgeStartPort)
-                {
-                    Point portPos = endNode.port.socket.TranslatePoint(new Point(10, 10), this);
-                    double dist = (mousePos - portPos).Length;
-                    if (dist < minDist)
-                    {
-                        minDist = dist;
-                        snapPos = portPos;
-                        targetPort = endNode.port;
-                    }
-                }
                 tempConnectionLine.X2 = snapPos.X;
                 tempConnectionLine.Y2 = snapPos.Y;
             }
@@ -286,13 +276,6 @@ namespace XyGraph
         // this can be expensive so get a port by it's node when known
         public Port GetPortById(Guid id)
         {
-            // start and end nodes dont actually count as nodes
-            // so they wont get caught by the below for loop
-            // check these first to speed up search on smaller graphs
-            if (startNode != null && startNode.port.guid == id) return startNode.port;
-            if (endNode != null && endNode.port.guid == id) return endNode.port;
-
-            // loop through all nodes in graph
             foreach (Node node in nodes)
             {
                 foreach (Port p in node.ports)
@@ -309,25 +292,6 @@ namespace XyGraph
         {
             while(nodes.Count >0)
                 nodes[0].Delete();
-
-            // we shouldne need to delete edges here,
-            // deleting the nodes should also delete any edges they were connected to
-
-            // delete start/end nodes
-            if (startNode != null)
-            {
-                startNode.Delete();
-                startNode = null;
-            }
-            if (endNode != null)
-            {
-                endNode.Delete();
-                endNode = null;
-            }
-
-
-            // we shouldnt need to clear the lists here, they should already be cleared by this point
-            // i prefer to manage these elements properly instead doing of "just in case" code
         }
 
         // save graph into a JsonObject (nodes include their ports)
@@ -337,30 +301,6 @@ namespace XyGraph
             {
                 ["schemaVersion"] = 1
             };
-
-            // Save start node first
-            if (startNode != null)
-            {
-                JsonObject startObj = new JsonObject
-                {
-                    ["portId"] = startNode.port?.guid.ToString() ?? string.Empty,
-                    ["x"] = Canvas.GetLeft(startNode),
-                    ["y"] = Canvas.GetTop(startNode)
-                };
-                obj["startNode"] = startObj;
-            }
-
-            // Save end node next
-            if (endNode != null)
-            {
-                JsonObject endObj = new JsonObject
-                {
-                    ["portId"] = endNode.port?.guid.ToString() ?? string.Empty,
-                    ["x"] = Canvas.GetLeft(endNode),
-                    ["y"] = Canvas.GetTop(endNode)
-                };
-                obj["endNode"] = endObj;
-            }
 
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
@@ -388,42 +328,6 @@ namespace XyGraph
             // clear existing graph
             Clear();
 
-            // load start/end nodes first so their ports are discoverable by GetPortById
-            JsonObject startObj = obj["startNode"] as JsonObject;
-            if (startObj != null)
-            {
-                string portIdStr = startObj["portId"]?.GetValue<string>() ?? string.Empty;
-                double x = startObj["x"]?.GetValue<double>() ?? 0.0;
-                double y = startObj["y"]?.GetValue<double>() ?? 0.0;
-
-                StartNode s = new StartNode(this);
-                if (!string.IsNullOrEmpty(portIdStr) && Guid.TryParse(portIdStr, out Guid pid))
-                    s.port.guid = pid;
-                Canvas.SetLeft(s, x);
-                Canvas.SetTop(s, y);
-                Children.Add(s);
-                startNode = s;
-                startItem.IsEnabled = false;
-            }
-
-            JsonObject endObj = obj["endNode"] as JsonObject;
-            if (endObj != null)
-            {
-                string portIdStr = endObj["portId"]?.GetValue<string>() ?? string.Empty;
-                double x = endObj["x"]?.GetValue<double>() ?? 0.0;
-                double y = endObj["y"]?.GetValue<double>() ?? 0.0;
-
-                EndNode eNode = new EndNode(this);
-                if (!string.IsNullOrEmpty(portIdStr) && Guid.TryParse(portIdStr, out Guid pid))
-                    eNode.port.guid = pid;
-                Canvas.SetLeft(eNode, x);
-                Canvas.SetTop(eNode, y);
-                Children.Add(eNode);
-                endNode = eNode;
-                endItem.IsEnabled = false;
-            }
-
-            // load nodes first
             JsonArray nodesArray = obj["nodes"] as JsonArray;
             if (nodesArray != null)
             {
@@ -453,6 +357,13 @@ namespace XyGraph
                     Edge.Load(edgeObj, this);
                 }
             }
+
+            // Set start and end nodes after loading
+            startNode = nodes.FirstOrDefault(n => n is StartNode) as StartNode;
+            if (startNode != null) startItem.IsEnabled = false;
+
+            endNode = nodes.FirstOrDefault(n => n is EndNode) as EndNode;
+            if (endNode != null) endItem.IsEnabled = false;
         }
 
         // will return an instance of the type, casted to a Node
@@ -532,6 +443,23 @@ namespace XyGraph
             }
 
             return result;
+        }
+
+
+
+        // =======================================================================
+        //                            Runtime behaviour
+        // =======================================================================
+
+        public void Finished()
+        {
+            activeNode = null;
+            status = GraphStatus.Completed;
+        }
+        public void OnError(Node node)
+        {
+            activeNode = null;
+            status = GraphStatus.Error;
         }
     }
 }

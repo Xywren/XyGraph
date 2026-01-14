@@ -28,18 +28,20 @@ namespace XyGraph
         public NodeContainer bottomContainer { get; private set; }
 
         public Graph graph;
+        public List<Node> inputs = new List<Node>();
+        public List<Node> outputs = new List<Node>();
 
 
         public double SpawnOffsetX = 75;
         public double SpawnOffsetY = 50;
 
-        public string title 
-        { 
+        public string title
+        {
             get;
-            set 
-            { 
-                if (titleTextBlock != null) titleTextBlock.Text = value; 
-            } 
+            set
+            {
+                if (titleTextBlock != null) titleTextBlock.Text = value;
+            }
         } = "Title";
 
         private TextBlock titleTextBlock;
@@ -188,7 +190,6 @@ namespace XyGraph
             var obj = new JsonObject
             {
                 ["type"] = Type,
-                ["schemaVersion"] = 1,
                 ["id"] = guid.ToString(),
                 ["x"] = x,
                 ["y"] = y
@@ -246,6 +247,56 @@ namespace XyGraph
                         outputContainer.Add(p);
                 }
             }
+        }
+
+
+
+
+
+
+        // =======================================================================
+        //                            Runtime behaviour
+        // =======================================================================
+
+        public enum NodeState
+        {
+            Idle,
+            Running,
+            Completed,
+            Error
+        }
+        public NodeState state { get; internal set; } = NodeState.Idle;
+
+        public virtual void Run()
+        {
+            state = NodeState.Running;
+        }
+        public virtual void Completed()
+        {
+            state = NodeState.Completed;
+        }
+        public virtual void Error()
+        {
+            state = NodeState.Error;
+            graph.OnError(this);
+        }
+
+        public virtual void NextNode(int outputIndex = 0)
+        {
+            Node nextNode = outputs[outputIndex];
+        }
+
+        public List<string> GetOutputs()
+        {
+            List<string> outputNames = new List<string>();
+            foreach (Port port in ports)
+            {
+                if (port.type == PortType.Output)
+                {
+                    outputNames.Add(port.name);
+                }
+            }
+            return outputNames;
         }
     }
 }

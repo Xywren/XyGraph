@@ -32,6 +32,21 @@ namespace XyGraph
 
             fromPort.ConnectionMade(this);
             toPort.ConnectionMade(this);
+
+            var fromNode = fromPort.parentContainer.node;
+            var toNode = toPort.parentContainer.node;
+
+
+            if (fromPort.type == PortType.Input)
+                fromNode.inputs.Add(toNode);
+            else
+                fromNode.outputs.Add(toNode);
+
+            if (toPort.type == PortType.Input)
+                toNode.inputs.Add(fromNode);
+            else
+                toNode.outputs.Add(fromNode);
+
         }
 
         public void UpdatePosition()

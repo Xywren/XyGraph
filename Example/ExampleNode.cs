@@ -21,6 +21,7 @@ namespace XyGraph
             SpawnOffsetY = 50;
 
 
+            // build your node UI here:
 
             exampleProperty = new TextBox { Text = title, Margin = new Thickness(2), MinWidth = 120 };
             topContainer.Add(exampleProperty);
@@ -49,6 +50,10 @@ namespace XyGraph
         }
 
 
+        // =======================================================================
+        //                            Serialization
+        // =======================================================================
+
         public override JsonObject Save()
         {
             // run the default Node Save function first
@@ -68,6 +73,28 @@ namespace XyGraph
             // Load your custom properties.
             string exampleText = obj["ExampleProperty"]?.GetValue<string>() ?? string.Empty;
             exampleProperty.Text = exampleText;
+        }
+
+        // =======================================================================
+        //                            Runtime behaviour
+        // =======================================================================
+
+        public override void Run()
+        {
+            base.Run();
+
+            // Your custom runtime behaviour here
+        }
+        public override void Completed()
+        {
+            base.Completed();
+            // Your custom completion behaviour here
+        }
+        public override void Error()
+        {
+            // Your custom error behaviour here
+
+            base.Error();
         }
     }
 }
