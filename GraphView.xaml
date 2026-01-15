@@ -1,0 +1,9 @@
+<UserControl x:Class="XyGraph.GraphView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:XyGraph">
+    <Grid ClipToBounds="True" Background="Transparent">
+        <!-- Host the large graph inside a clipped viewport -->
+        <local:Graph x:Name="graph" Width="10000" Height="10000" />
+    </Grid>
+</UserControl>

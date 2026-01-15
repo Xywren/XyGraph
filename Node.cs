@@ -317,13 +317,18 @@ namespace XyGraph
             double y = Canvas.GetTop(this);
             if (double.IsNaN(x)) x = 0;
             if (double.IsNaN(y)) y = 0;
+            // convert to centered world coordinates (world origin at center of graph)
+            double worldSize = graph?.WorldSize ?? 10000.0;
+            double half = worldSize / 2.0;
+            double centeredX = x - half;
+            double centeredY = y - half;
 
             var obj = new JsonObject
             {
                 ["type"] = Type,
                 ["id"] = guid.ToString(),
-                ["x"] = x,
-                ["y"] = y
+                ["x"] = centeredX,
+                ["y"] = centeredY
             };
 
             // loop through all ports that belong to this node and save them
@@ -347,11 +352,13 @@ namespace XyGraph
 
             guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? guid.ToString());
 
-            double x = obj["x"]?.GetValue<double>() ?? 0.0;
-            Canvas.SetLeft(this, x);
-
-            double y = obj["y"]?.GetValue<double>() ?? 0.0;
-            Canvas.SetTop(this, y);
+            // loaded coordinates are centered world coordinates; convert to canvas coords
+            double centeredX = obj["x"]?.GetValue<double>() ?? 0.0;
+            double centeredY = obj["y"]?.GetValue<double>() ?? 0.0;
+            Point point = new Point(centeredX, centeredY);
+            point =  ConvertWorldSpace(point);
+            Canvas.SetLeft(this, point.X);
+            Canvas.SetTop(this, point.Y);
 
             // remove any existing ports to avoid duplicates when re-loading
             while (ports.Count > 0)
@@ -379,6 +386,16 @@ namespace XyGraph
                 }
             }
         }
+
+
+        // convert graph coordinates (0,0 at the center of the graph) to canvas coordinates (0,0 wt the top left of the graph)
+        internal Point ConvertWorldSpace(Point p)
+        {
+            double worldSize = graph?.WorldSize ?? 10000.0;
+            return new Point(p.X + worldSize/2, p.Y + worldSize/2);
+        }
+
+
 
 
 

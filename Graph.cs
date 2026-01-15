@@ -11,25 +11,20 @@ using System.Xml.Linq;
 
 namespace XyGraph
 {
+    // 2 Co-Ordinate systems:
+    //  - "Graph" Coordinates: With the origin in the center of the graph. (this is how nodes are saved)
+    //  - "Canvas" Coordinates: With the origin in the top-left of the canvas. (this is how WPF Canvas works)
+
     public class Graph : Canvas
     {
+        public double WorldSize { get; set; } = 10000.0;
         private enum GraphState { None, Panning, DraggingNode, CreatingEdge }
 
-        private GraphState currentState = GraphState.None;
-        private Point lastMousePos;
         public Point rightClickPos;
-        private UIElement draggedNode;
-        private Point dragStartPos;
-        private Port edgeStartPort;
-        private Line tempConnectionLine;
         public List<Edge> edges { get; internal set; } = new List<Edge>();
         public List<Node> nodes { get; internal set; } = new List<Node>();
-        private Port targetPort;
 
-        private const double ZOOM_FACTOR = 1.1;
-        private const double ZOOM_REDUCE = 0.9;
         private const int GRID_SIZE = 20;
-        private const double SNAP_DISTANCE = 25;
 
         public StartNode startNode { get; internal set; }
         public EndNode endNode { get; internal set; }
@@ -49,11 +44,7 @@ namespace XyGraph
         public Graph()
         {
             Background = Brushes.White;
-            MouseWheel += OnMouseWheel;
-            MouseLeftButtonDown += OnMouseLeftButtonDown;
-            MouseMove += OnMouseMove;
-            MouseLeftButtonUp += OnMouseLeftButtonUp;
-            MouseRightButtonDown += OnMouseRightButtonDown;
+            // Graph no longer owns mouse input handlers; GraphView manages mouse interactions (pan/zoom/drag/edge)
 
             ContextMenu = new ContextMenu();
 
@@ -66,10 +57,6 @@ namespace XyGraph
             ContextMenu.Items.Add(endItem);
         }
 
-        private void OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            rightClickPos = e.GetPosition(this);
-        }
 
         private void AddStartNode()
         {
@@ -83,8 +70,6 @@ namespace XyGraph
                 startItem.IsEnabled = false;
             }
         }
-
-
         private void AddEndNode()
         {
             if (endNode == null)
@@ -106,16 +91,8 @@ namespace XyGraph
             Children.Add(n);
         }
 
-        private void OnMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            double scale = e.Delta > 0 ? ZOOM_FACTOR : ZOOM_REDUCE;
-            ScaleTransform matrix = LayoutTransform as ScaleTransform ?? new ScaleTransform(1, 1);
-            matrix.ScaleX *= scale;
-            matrix.ScaleY *= scale;
-            LayoutTransform = matrix;
-        }
 
-        private UIElement GetNodeFromSource(object source)
+        internal UIElement GetNodeFromSource(object source)
         {
             DependencyObject element = source as DependencyObject;
             while (element != null && element != this)
@@ -127,133 +104,6 @@ namespace XyGraph
                 element = VisualTreeHelper.GetParent(element);
             }
             return null;
-        }
-
-
-        private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            if(e.Source is Socket && currentState == GraphState.None)
-            {
-                Port port = (e.Source as Socket).port;
-                edgeStartPort = port;
-                currentState = GraphState.CreatingEdge;
-                tempConnectionLine = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false };
-                Children.Add(tempConnectionLine);
-                CaptureMouse();
-            }
-            else if (e.Source != this && currentState == GraphState.None)
-            {
-                UIElement node = GetNodeFromSource(e.Source);
-                if (node != null)
-                {
-                    currentState = GraphState.DraggingNode;
-                    draggedNode = node;
-                    dragStartPos = e.GetPosition(this);
-                    CaptureMouse();
-                }
-            }
-            else if (e.Source == this && currentState == GraphState.None)
-            {
-                currentState = GraphState.Panning;
-                lastMousePos = e.GetPosition(Window.GetWindow(this));
-                CaptureMouse();
-            }
-        }
-
-        private void OnMouseMove(object sender, MouseEventArgs e)
-        {
-            if (currentState == GraphState.CreatingEdge)
-            {
-                Point mousePos = e.GetPosition(this);
-                int startOffset = edgeStartPort.socket.size / 2;
-                Point startPos = edgeStartPort.socket.TranslatePoint(new Point(startOffset, startOffset), this);
-                tempConnectionLine.X1 = startPos.X;
-                tempConnectionLine.Y1 = startPos.Y;
-                Point snapPos = mousePos;
-                targetPort = null;
-                double minDist = SNAP_DISTANCE;
-                foreach (Node n in nodes)
-                {
-                    foreach (Port p in n.ports)
-                    {
-                        if (p != edgeStartPort && p.type != edgeStartPort.type)
-                        {
-                            int endOffset = p.socket.size / 2;
-                            Point portPos = p.socket.TranslatePoint(new Point(endOffset, endOffset), this);
-                            double dist = (mousePos - portPos).Length;
-                            if (dist < minDist)
-                            {
-                                minDist = dist;
-                                snapPos = portPos;
-                                targetPort = p;
-                            }
-                        }
-                    }
-                }
-                tempConnectionLine.X2 = snapPos.X;
-                tempConnectionLine.Y2 = snapPos.Y;
-            }
-            else if (currentState == GraphState.DraggingNode)
-            {
-                Point pos = e.GetPosition(this);
-                Vector delta = pos - dragStartPos;
-                double currentLeft = Canvas.GetLeft(draggedNode);
-                double currentTop = Canvas.GetTop(draggedNode);
-                Canvas.SetLeft(draggedNode, currentLeft + delta.X);
-                Canvas.SetTop(draggedNode, currentTop + delta.Y);
-                dragStartPos = pos;
-                // Update edges
-                if(draggedNode is Node node)
-                    node.RedrawEdges();
-                else if (draggedNode is StartNode start)
-                {
-                    foreach (Edge edge in start.port.edges)
-                        edge.UpdatePosition();
-                }
-                else if (draggedNode is EndNode end)
-                {
-                    foreach (Edge edge in end.port.edges)
-                        edge.UpdatePosition();
-                }
-            }
-            else if (currentState == GraphState.Panning)
-            {
-                Point pos = e.GetPosition(Window.GetWindow(this));
-                Vector delta = pos - lastMousePos;
-                TranslateTransform transform = RenderTransform as TranslateTransform ?? new TranslateTransform();
-                transform.X += delta.X;
-                transform.Y += delta.Y;
-                RenderTransform = transform;
-                lastMousePos = pos;
-            }
-        }
-
-        private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            if (currentState == GraphState.CreatingEdge)
-            {
-                currentState = GraphState.None;
-                Children.Remove(tempConnectionLine);
-                tempConnectionLine = null;
-                if (targetPort != null)
-                {
-                    CreateEdge(edgeStartPort, targetPort);
-                }
-                edgeStartPort = null;
-                targetPort = null;
-                ReleaseMouseCapture();
-            }
-            else if (currentState == GraphState.DraggingNode)
-            {
-                currentState = GraphState.None;
-                draggedNode = null;
-                ReleaseMouseCapture();
-            }
-            else if (currentState == GraphState.Panning)
-            {
-                currentState = GraphState.None;
-                ReleaseMouseCapture();
-            }
         }
 
         public Edge CreateEdge(Port from, Port to)
@@ -294,7 +144,7 @@ namespace XyGraph
                 nodes[0].Delete();
         }
 
-        // save graph into a JsonObject (nodes include their ports)
+        // save graph into a JsonObject
         public JsonObject Save()
         {
             JsonObject obj = new JsonObject
@@ -397,9 +247,7 @@ namespace XyGraph
         {
             base.OnRender(dc);
 
-            // Guard against infinite or NaN sizes. In some layout scenarios (or during design-time)
-            // WPF may report ActualWidth/ActualHeight as PositiveInfinity which would make the
-            // for-loops below never terminate and freeze the UI. Bail out if sizes are not finite.
+            // Guard against infinite or NaN sizes.
             if (double.IsInfinity(ActualWidth) || double.IsInfinity(ActualHeight) || double.IsNaN(ActualWidth) || double.IsNaN(ActualHeight))
             {
                 return;
@@ -457,6 +305,9 @@ namespace XyGraph
 
             return result;
         }
+
+
+        
 
 
 

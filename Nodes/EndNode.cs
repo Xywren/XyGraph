@@ -78,11 +78,14 @@ namespace XyGraph
 
             guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? guid.ToString());
 
-            double x = obj["x"]?.GetValue<double>() ?? 0.0;
-            Canvas.SetLeft(this, x);
 
-            double y = obj["y"]?.GetValue<double>() ?? 0.0;
-            Canvas.SetTop(this, y);
+            // loaded coordinates are centered world coordinates; convert to canvas coords
+            double centeredX = obj["x"]?.GetValue<double>() ?? 0.0;
+            double centeredY = obj["y"]?.GetValue<double>() ?? 0.0;
+            Point point = new Point(centeredX, centeredY);
+            point = ConvertWorldSpace(point);
+            Canvas.SetLeft(this, point.X);
+            Canvas.SetTop(this, point.Y);
 
 
             // load ports that belong to this node
