@@ -17,6 +17,7 @@ namespace XyGraph
         public const double MIN_NODE_HEIGHT = 100;
         private const int CORNER_RADIUS = 10;
         private Grid grid;
+        private Border innerBorder;
         public List<Port> ports = new List<Port>();
         protected virtual string Type => GetType().Name;
 
@@ -44,6 +45,95 @@ namespace XyGraph
             }
         } = "Title";
 
+        // Outline properties: default blue outline, customizable via dependency properties
+        public static readonly DependencyProperty OutlineBrushProperty = DependencyProperty.Register(
+            nameof(OutlineBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Blue, OnOutlineBrushChanged));
+
+        public Brush OutlineBrush
+        {
+            get => (Brush)GetValue(OutlineBrushProperty);
+            set => SetValue(OutlineBrushProperty, value);
+        }
+
+        public static readonly DependencyProperty OutlineThicknessProperty = DependencyProperty.Register(
+            nameof(OutlineThickness), typeof(double), typeof(Node), new PropertyMetadata(3.0, OnOutlineThicknessChanged));
+
+        public double OutlineThickness
+        {
+            get => (double)GetValue(OutlineThicknessProperty);
+            set => SetValue(OutlineThicknessProperty, value);
+        }
+
+        // Brushes per state
+        public static readonly DependencyProperty OutlineRunningBrushProperty = DependencyProperty.Register(
+            nameof(OutlineRunningBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Blue, OnOutlineBrushChanged));
+
+        public Brush OutlineRunningBrush
+        {
+            get => (Brush)GetValue(OutlineRunningBrushProperty);
+            set => SetValue(OutlineRunningBrushProperty, value);
+        }
+
+        public static readonly DependencyProperty OutlineCompletedBrushProperty = DependencyProperty.Register(
+            nameof(OutlineCompletedBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Green, OnOutlineBrushChanged));
+
+        public Brush OutlineCompletedBrush
+        {
+            get => (Brush)GetValue(OutlineCompletedBrushProperty);
+            set => SetValue(OutlineCompletedBrushProperty, value);
+        }
+
+        public static readonly DependencyProperty OutlineErrorBrushProperty = DependencyProperty.Register(
+            nameof(OutlineErrorBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Red, OnOutlineBrushChanged));
+
+        public Brush OutlineErrorBrush
+        {
+            get => (Brush)GetValue(OutlineErrorBrushProperty);
+            set => SetValue(OutlineErrorBrushProperty, value);
+        }
+
+        private static void OnOutlineBrushChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is Node n)
+            {
+                n.BorderBrush = e.NewValue as Brush;
+            }
+        }
+
+        private static void OnOutlineThicknessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is Node n)
+            {
+                double v = 0.0;
+                if (e.NewValue is double dv) v = dv;
+                n.BorderThickness = new Thickness(v);
+                if (n.innerBorder != null)
+                {
+                    n.innerBorder.CornerRadius = new CornerRadius(Math.Max(0, CORNER_RADIUS - (int)v));
+                }
+            }
+        }
+
+        public static readonly DependencyProperty OutlineGapProperty = DependencyProperty.Register(
+            nameof(OutlineGap), typeof(double), typeof(Node), new PropertyMetadata(2.0, OnOutlineGapChanged));
+
+        public double OutlineGap
+        {
+            get => (double)GetValue(OutlineGapProperty);
+            set => SetValue(OutlineGapProperty, value);
+        }
+
+        private static void OnOutlineGapChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is Node n)
+            {
+                double gap = 0.0;
+                if (e.NewValue is double gd) gap = gd;
+                // set outer padding to create a gap between node edge and inner content (outline separation)
+                n.Padding = new Thickness(gap);
+            }
+        }
+
         private TextBlock titleTextBlock;
 
         public Node(Graph graph)
@@ -53,8 +143,12 @@ namespace XyGraph
             this.graph = graph;
             Background = Brushes.Magenta;
             CornerRadius = new CornerRadius(CORNER_RADIUS);
+            // initialize outline visuals from dependency properties
+            BorderBrush = OutlineBrush;
+            BorderThickness = new Thickness(OutlineThickness);
 
-            Grid grid = new Grid();
+            // create inner grid and keep reference to it
+            grid = new Grid();
 
             // Column definitions
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -106,7 +200,17 @@ namespace XyGraph
             grid.Children.Add(bottomContainer);
             bottomContainer.CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS);
 
-            Child = grid;
+            // create an inner border to render node background inset from the outer outline
+            innerBorder = new Border();
+            innerBorder.Background = this.Background;
+            innerBorder.CornerRadius = new CornerRadius(Math.Max(0, CORNER_RADIUS - (int)OutlineThickness));
+            innerBorder.Child = grid;
+
+            // outer border (this) will act as the outline; make its background transparent so gap shows
+            this.Background = Brushes.Transparent;
+            this.Padding = new Thickness(OutlineGap);
+
+            Child = innerBorder;
             ContextMenu = new ContextMenu();
             MenuItem deleteItem = new MenuItem { Header = "Delete Node" };
             deleteItem.Click += (s, e) => this.Delete();
@@ -115,6 +219,33 @@ namespace XyGraph
             titleTextBlock = new TextBlock { Text = title, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
             titleContainer.Add(titleTextBlock);
             titleContainer.Visibility = Visibility.Visible;
+
+            // set initial outline based on state
+            UpdateOutlineForState();
+        }
+
+        private void UpdateOutlineForState()
+        {
+            switch (state)
+            {
+                case NodeState.Idle:
+                    // hide outline
+                    this.BorderBrush = Brushes.Transparent;
+                    this.BorderThickness = new Thickness(0);
+                    break;
+                case NodeState.Running:
+                    this.BorderBrush = OutlineRunningBrush ?? OutlineBrush;
+                    this.BorderThickness = new Thickness(OutlineThickness);
+                    break;
+                case NodeState.Completed:
+                    this.BorderBrush = OutlineCompletedBrush ?? OutlineBrush;
+                    this.BorderThickness = new Thickness(OutlineThickness);
+                    break;
+                case NodeState.Error:
+                    this.BorderBrush = OutlineErrorBrush ?? OutlineBrush;
+                    this.BorderThickness = new Thickness(OutlineThickness);
+                    break;
+            }
         }
 
         public void PortsChanged()
@@ -265,7 +396,16 @@ namespace XyGraph
             Completed,
             Error
         }
-        public NodeState state { get; internal set; } = NodeState.Idle;
+        private NodeState _state = NodeState.Idle;
+        public NodeState state
+        {
+            get => _state;
+            internal set
+            {
+                _state = value;
+                UpdateOutlineForState();
+            }
+        }
 
         public virtual void Run()
         {

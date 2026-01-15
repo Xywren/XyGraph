@@ -396,14 +396,27 @@ namespace XyGraph
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);
-            Pen pen = new Pen(Brushes.LightGray, 1);
-            for (double x = 0; x < ActualWidth; x += GRID_SIZE)
+
+            // Guard against infinite or NaN sizes. In some layout scenarios (or during design-time)
+            // WPF may report ActualWidth/ActualHeight as PositiveInfinity which would make the
+            // for-loops below never terminate and freeze the UI. Bail out if sizes are not finite.
+            if (double.IsInfinity(ActualWidth) || double.IsInfinity(ActualHeight) || double.IsNaN(ActualWidth) || double.IsNaN(ActualHeight))
             {
-                dc.DrawLine(pen, new Point(x, 0), new Point(x, ActualHeight));
+                return;
             }
-            for (double y = 0; y < ActualHeight; y += GRID_SIZE)
+
+            Pen pen = new Pen(Brushes.LightGray, 1);
+
+            double maxX = Math.Max(0, ActualWidth);
+            double maxY = Math.Max(0, ActualHeight);
+
+            for (double x = 0; x < maxX; x += GRID_SIZE)
             {
-                dc.DrawLine(pen, new Point(0, y), new Point(ActualWidth, y));
+                dc.DrawLine(pen, new Point(x, 0), new Point(x, maxY));
+            }
+            for (double y = 0; y < maxY; y += GRID_SIZE)
+            {
+                dc.DrawLine(pen, new Point(0, y), new Point(maxX, y));
             }
         }
 
