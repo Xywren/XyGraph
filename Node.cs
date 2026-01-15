@@ -17,7 +17,7 @@ namespace XyGraph
         public const double MIN_NODE_HEIGHT = 100;
         private const int CORNER_RADIUS = 10;
         private Grid grid;
-        private Border innerBorder;
+        internal Border innerBorder;
         public List<Port> ports = new List<Port>();
         protected virtual string Type => GetType().Name;
 

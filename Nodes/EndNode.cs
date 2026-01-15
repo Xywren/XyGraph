@@ -46,6 +46,7 @@ namespace XyGraph
             // make backgrounds transparent
             mainContainer.Background = Brushes.Transparent;
             Background = Brushes.Transparent;
+            innerBorder.Background = Brushes.Transparent;
 
             // add END text
             TextBlock tb = new TextBlock { Text = "END", HorizontalAlignment = HorizontalAlignment.Center };

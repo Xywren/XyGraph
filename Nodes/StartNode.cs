@@ -31,6 +31,7 @@ namespace XyGraph
             // Make backgrounds transparent
             mainContainer.Background = Brushes.Transparent;
             Background = Brushes.Transparent; // Remove pink background
+            innerBorder.Background = Brushes.Transparent;
 
             // add START text
             TextBlock tb = new TextBlock { Text = "START", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 4) };
