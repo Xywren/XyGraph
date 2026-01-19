@@ -1,13 +1,8 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
-using System.Xml.Linq;
 
 namespace XyGraph
 {
@@ -17,6 +12,7 @@ namespace XyGraph
 
     public class Graph : Canvas
     {
+        public event Action? GraphChanged;
         public double WorldSize { get; set; } = 10000.0;
         private enum GraphState { None, Panning, DraggingNode, CreatingEdge }
 
@@ -69,6 +65,8 @@ namespace XyGraph
                 Canvas.SetTop(startNode, rightClickPos.Y - StartNode.OffsetY);
                 Children.Add(startNode);
                 nodes.Add(startNode);
+                startNode.NodeChanged -= OnNodeChanged;
+                startNode.NodeChanged += OnNodeChanged;
                 startItem.IsEnabled = false;
             }
         }
@@ -81,6 +79,8 @@ namespace XyGraph
                 Canvas.SetTop(endNode, rightClickPos.Y - EndNode.OffsetY);
                 Children.Add(endNode);
                 nodes.Add(endNode);
+                endNode.NodeChanged -= OnNodeChanged;
+                endNode.NodeChanged += OnNodeChanged;
                 endItem.IsEnabled = false;
             }
         }
@@ -91,6 +91,15 @@ namespace XyGraph
             Canvas.SetTop(n, posY);
             nodes.Add(n);
             Children.Add(n);
+            // subscribe to node notifications so graph can bubble changes
+            n.NodeChanged -= OnNodeChanged;
+            n.NodeChanged += OnNodeChanged;
+        }
+
+        // bubbles node change events up as a graph-level notification
+        private void OnNodeChanged()
+        {
+            GraphChanged?.Invoke();
         }
 
 
@@ -142,6 +151,12 @@ namespace XyGraph
         // clears graph of nodes and edges
         public void Clear()
         {
+            // unsubscribe node handlers to avoid leaks
+            foreach (Node n in nodes.ToList())
+            {
+                n.NodeChanged -= OnNodeChanged;
+            }
+
             while(nodes.Count >0)
                 nodes[0].Delete();
         }
@@ -156,6 +171,9 @@ namespace XyGraph
 
             // include graph GUID in the saved data
             obj["guid"] = guid.ToString();
+            // persist runtime graph status and active node (if any)
+            obj["status"] = status.ToString();
+            obj["activeNode"] = activeNode != null ? activeNode.guid.ToString() : null;
 
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
@@ -176,7 +194,7 @@ namespace XyGraph
         }
 
         // load graph from JsonObject into this graph (non-static)
-        public void Load(JsonObject obj)
+        public Graph Load(JsonObject obj)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
 
@@ -224,12 +242,37 @@ namespace XyGraph
                 }
             }
 
+            // restore runtime status (if present)
+            string statusStr = obj["status"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(statusStr))
+            {
+                if (System.Enum.TryParse<GraphStatus>(statusStr, out GraphStatus parsedStatus))
+                {
+                    status = parsedStatus;
+                }
+            }
+
+            string activeGuidStr = obj["activeNode"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(activeGuidStr))
+            {
+                if (System.Guid.TryParse(activeGuidStr, out System.Guid activeGuid))
+                {
+                    Node found = nodes.FirstOrDefault(n => n.guid == activeGuid);
+                    if (found != null)
+                    {
+                        activeNode = found;
+                    }
+                }
+            }
+
             // Set start and end nodes after loading
             startNode = nodes.FirstOrDefault(n => n is StartNode) as StartNode;
             if (startNode != null) startItem.IsEnabled = false;
 
             endNode = nodes.FirstOrDefault(n => n is EndNode) as EndNode;
             if (endNode != null) endItem.IsEnabled = false;
+
+            return this;
         }
 
         // will return an instance of the type, casted to a Node
@@ -340,6 +383,15 @@ namespace XyGraph
         {
             activeNode = null;
             status = GraphStatus.Error;
+        }
+
+        // Start running the graph from the start node (if present)
+        public void Run()
+        {
+            if (startNode == null) return;
+            activeNode = startNode;
+            status = GraphStatus.Running;
+            startNode.Run();
         }
     }
 }

@@ -50,6 +50,12 @@ namespace XyGraph
             this.MouseRightButtonDown += GraphView_MouseRightButtonDown;
         }
 
+        // Expose a helper to run the graph's start node from higher-level UIs
+        public void Run()
+        {
+            graph.Run();
+        }
+
 
         // The visual Canvas used for the graph uses content coordinates with (0,0) at the top-left
         // while the graph's logical/world origin is intended to be the center.

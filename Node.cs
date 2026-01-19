@@ -11,6 +11,7 @@ namespace XyGraph
 {
     public class Node : Border
     {
+        public event Action? NodeChanged;
         public Guid guid;
 
         public const double MIN_NODE_WIDTH = 150;
@@ -328,7 +329,8 @@ namespace XyGraph
                 ["type"] = Type,
                 ["id"] = guid.ToString(),
                 ["x"] = centeredX,
-                ["y"] = centeredY
+                ["y"] = centeredY,
+                ["state"] = state.ToString()
             };
 
             // loop through all ports that belong to this node and save them
@@ -385,6 +387,17 @@ namespace XyGraph
                         outputContainer.Add(p);
                 }
             }
+
+            // restore runtime state if present
+            string stateStr = obj["state"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(stateStr))
+            {
+                if (System.Enum.TryParse<NodeState>(stateStr, out NodeState parsedState))
+                {
+                    // assign to property so UpdateOutlineForState() runs
+                    this.state = parsedState;
+                }
+            }
         }
 
 
@@ -434,6 +447,8 @@ namespace XyGraph
             {
                 _state = value;
                 UpdateOutlineForState();
+                // notify listeners that the node changed (no payload)
+                NodeChanged?.Invoke();
             }
         }
 
@@ -454,6 +469,7 @@ namespace XyGraph
         public virtual void NextNode(int outputIndex = 0)
         {
             Node nextNode = outputs[outputIndex];
+            nextNode.Run();
         }
 
         public List<string> GetOutputs()
