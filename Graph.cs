@@ -31,6 +31,8 @@ namespace XyGraph
         internal MenuItem startItem { get; private set; }
         internal MenuItem endItem { get; private set; }
 
+        public Guid guid { get; internal set; }
+
         public enum GraphStatus
         {
             Idle,
@@ -44,7 +46,7 @@ namespace XyGraph
         public Graph()
         {
             Background = Brushes.White;
-            // Graph no longer owns mouse input handlers; GraphView manages mouse interactions (pan/zoom/drag/edge)
+            guid = System.Guid.NewGuid();
 
             ContextMenu = new ContextMenu();
 
@@ -152,6 +154,9 @@ namespace XyGraph
                 ["schemaVersion"] = 1
             };
 
+            // include graph GUID in the saved data
+            obj["guid"] = guid.ToString();
+
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
             {
@@ -174,6 +179,17 @@ namespace XyGraph
         public void Load(JsonObject obj)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
+
+            // restore graph GUID if present, otherwise generate a new one
+            string guidStr = obj["guid"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(guidStr))
+            {
+                guid = System.Guid.Parse(guidStr);
+            }
+            else
+            {
+                guid = System.Guid.NewGuid();
+            }
 
             // clear existing graph
             Clear();

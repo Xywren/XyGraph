@@ -395,6 +395,19 @@ namespace XyGraph
             return new Point(p.X + worldSize/2, p.Y + worldSize/2);
         }
 
+        public List<String> GetOutputStrings()
+        {
+            List<string> outputNames = new List<string>();
+            foreach (Port port in ports)
+            {
+                if (port.type == PortType.Output)
+                {
+                    outputNames.Add(port.name);
+                }
+            }
+            return outputNames;
+        }
+
 
 
 
