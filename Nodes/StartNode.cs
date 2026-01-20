@@ -20,10 +20,7 @@ namespace XyGraph
             this.graph = graph;
 
             //create port
-            Port port = new Port("", PortType.Output, this, 20);
-            port.isEditable = false;
-            port.isRemovable = false;
-            port.socket.Background = Brushes.Black;
+            Port port = new Port("", PortDirection.Output, typeof(Node), 20, Brushes.Black, false);
 
             // Hide the title container
             titleContainer.Visibility = Visibility.Collapsed;

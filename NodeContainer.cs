@@ -38,7 +38,7 @@ namespace XyGraph
             if (child is Port port)
             {
                 node.ports.Add(port);
-                node.PortsChanged();
+                //node.PortsChanged();
                 port.parentContainer = this;
             }
         }
@@ -50,7 +50,7 @@ namespace XyGraph
             if (child is Port port)
             {
                 node.ports.Remove(port);
-                node.PortsChanged();
+                //node.PortsChanged();
             }
 
             // if no more chldren, hide container

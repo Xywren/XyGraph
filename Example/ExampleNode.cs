@@ -8,6 +8,10 @@ namespace XyGraph
 {
     public class ExampleNode : Node
     {
+        [NodeInput(Color = "#FF00FF")]
+        public Node input;
+        [NodeOutput]
+        public Node output;
 
         private TextBox exampleProperty;
 
@@ -28,20 +32,6 @@ namespace XyGraph
 
 
             topContainer.Add(new TextBlock { Text = "Top", Foreground = Brushes.White });
-            Port inputPort = new Port("Input", PortType.Input, this);
-
-            // output
-            Port outputPort = new Port("Output", PortType.Output, this);
-            inputContainer.Add(inputPort);
-            Button addOutputButton = new Button { Content = "Add Output", FontSize = 8, Height = 20 };
-            addOutputButton.Click += (s, e) =>
-            {
-                Port newPort = new Port("New Output", PortType.Output, this);
-                outputContainer.Add(newPort);
-            };
-
-            outputContainer.Add(addOutputButton);
-            outputContainer.Add(outputPort);
 
             mainContainer.Add(new TextBlock { Text = "Main", Foreground = Brushes.White });
             bottomContainer.Add(new TextBlock { Text = "Bottom", Foreground = Brushes.White });

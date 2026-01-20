@@ -37,12 +37,12 @@ namespace XyGraph
             var toNode = toPort.parentContainer.node;
 
 
-            if (fromPort.type == PortType.Input)
+            if (fromPort.direction == PortDirection.Input)
                 fromNode.inputs.Add(toNode);
             else
                 fromNode.outputs.Add(toNode);
 
-            if (toPort.type == PortType.Input)
+            if (toPort.direction == PortDirection.Input)
                 toNode.inputs.Add(fromNode);
             else
                 toNode.outputs.Add(fromNode);
@@ -51,8 +51,8 @@ namespace XyGraph
 
         public void UpdatePosition()
         {
-            Point start = fromPort.socket.TranslatePoint(new Point(fromPort.socket.size / 2, fromPort.socket.size / 2), graph);
-            Point end = toPort.socket.TranslatePoint(new Point(toPort.socket.size / 2, toPort.socket.size / 2), graph);
+            Point start = fromPort.socket.TranslatePoint(new Point(fromPort.socket.ActualWidth / 2, fromPort.socket.ActualHeight / 2), graph);
+            Point end = toPort.socket.TranslatePoint(new Point(toPort.socket.ActualWidth / 2, toPort.socket.ActualHeight / 2), graph);
 
             if (style == EdgeStyle.Linear)
             {
@@ -70,8 +70,8 @@ namespace XyGraph
             }
             else // Bezier
             {
-                Vector point1Offset = fromPort.type == PortType.Output ? new Vector(BEZIER_STRENGTH, 0) : new Vector(-BEZIER_STRENGTH, 0);
-                Vector point2Offset = toPort.type == PortType.Input ? new Vector(-BEZIER_STRENGTH, 0) : new Vector(BEZIER_STRENGTH, 0);
+                Vector point1Offset = fromPort.direction == PortDirection.Output ? new Vector(BEZIER_STRENGTH, 0) : new Vector(-BEZIER_STRENGTH, 0);
+                Vector point2Offset = toPort.direction == PortDirection.Input ? new Vector(-BEZIER_STRENGTH, 0) : new Vector(BEZIER_STRENGTH, 0);
 
                 PathGeometry geometry = new PathGeometry();
                 PathFigure figure = new PathFigure { StartPoint = start };

@@ -1,11 +1,13 @@
 using System;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Globalization;
-using System.Text.Json.Nodes;
 
 namespace XyGraph
 {
@@ -223,7 +225,72 @@ namespace XyGraph
 
             // set initial outline based on state
             UpdateOutlineForState();
+
+            InitializePortsFromAttributes();
         }
+
+
+        protected void InitializePortsFromAttributes()
+        {
+            Type t = this.GetType();
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+
+            // collect both fields and properties into a single list of work items
+            List<(MemberInfo member, Type memberType, string portName, PortDirection dir, string color, ConnectionType connType)> items =
+                new List<(MemberInfo, Type, string, PortDirection, string, ConnectionType)>();
+
+            // fields
+            foreach (FieldInfo field in t.GetFields(flags))
+            {
+                NodeInputAttribute inAttr = field.GetCustomAttribute<NodeInputAttribute>();
+                NodeOutputAttribute outAttr = field.GetCustomAttribute<NodeOutputAttribute>();
+                if (inAttr == null && outAttr == null) continue;
+
+                string portName = !string.IsNullOrEmpty(inAttr?.Name) ? inAttr.Name : outAttr?.Name;
+                if (string.IsNullOrEmpty(portName)) portName = field.Name;
+
+                Type memberType = field.FieldType ?? typeof(object);
+                PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
+
+                string colorName = inAttr?.Color ?? outAttr?.Color ?? "Black";
+                ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
+                items.Add((field, memberType, portName, dir, colorName, connType));
+            }
+
+            // properties
+            foreach (PropertyInfo prop in t.GetProperties(flags))
+            {
+                NodeInputAttribute inAttr = prop.GetCustomAttribute<NodeInputAttribute>();
+                NodeOutputAttribute outAttr = prop.GetCustomAttribute<NodeOutputAttribute>();
+                if (inAttr == null && outAttr == null) continue;
+
+                string portName = !string.IsNullOrEmpty(inAttr?.Name) ? inAttr.Name : outAttr?.Name;
+                if (string.IsNullOrEmpty(portName)) portName = prop.Name;
+
+                Type memberType = prop.PropertyType ?? typeof(object);
+                PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
+
+                string colorName = inAttr?.Color ?? outAttr?.Color ?? "Black";
+                ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
+                items.Add((prop, memberType, portName, dir, colorName, connType));
+            }
+
+            // single loop to create ports
+            BrushConverter brushConverter = new BrushConverter();
+            foreach (var entry in items)
+            {
+                Brush colorBrush = (Brush)brushConverter.ConvertFromString(entry.color);
+                Port p = new Port(entry.portName, entry.dir, entry.memberType, socketSize: 10, color: colorBrush);
+                // override connection type from attribute if specified
+                p.connectionType = entry.connType;
+
+                if (entry.dir == PortDirection.Input)
+                    inputContainer.Add(p);
+                else
+                    outputContainer.Add(p);
+            }
+        }
+
 
         private void UpdateOutlineForState()
         {
@@ -249,34 +316,6 @@ namespace XyGraph
             }
         }
 
-        public void PortsChanged()
-        {
-            // if more than 1 output port, make all output port labels editable
-            if (ports.Where(p => p.type == PortType.Output).Count() >= 2)
-            {
-                foreach (Port p in ports)
-                {
-                    if (p.type == PortType.Output)
-                    {
-                        p.isEditable = true;
-                        p.isRemovable = true;
-                    }
-                }
-            }
-
-            // if only 1 output port, make all output port labels uneditable
-            else if (ports.Where(p => p.type == PortType.Output).Count() == 1)
-            {
-                foreach (Port p in ports)
-                {
-                    if (p.type == PortType.Output)
-                    {
-                        p.isEditable = false;
-                        p.isRemovable = false;
-                    }
-                }
-            }
-        }
 
         public void Delete()
         {
@@ -358,7 +397,7 @@ namespace XyGraph
             double centeredX = obj["x"]?.GetValue<double>() ?? 0.0;
             double centeredY = obj["y"]?.GetValue<double>() ?? 0.0;
             Point point = new Point(centeredX, centeredY);
-            point =  ConvertWorldSpace(point);
+            point = ConvertWorldSpace(point);
             Canvas.SetLeft(this, point.X);
             Canvas.SetTop(this, point.Y);
 
@@ -381,7 +420,7 @@ namespace XyGraph
                     // create port via static loader
                     Port p = Port.Load(portObj, this);
 
-                    if (p.type == PortType.Input)
+                    if (p.direction == PortDirection.Input)
                         inputContainer.Add(p);
                     else
                         outputContainer.Add(p);
@@ -413,7 +452,7 @@ namespace XyGraph
             List<string> outputNames = new List<string>();
             foreach (Port port in ports)
             {
-                if (port.type == PortType.Output)
+                if (port.direction == PortDirection.Output)
                 {
                     outputNames.Add(port.name);
                 }
@@ -477,7 +516,7 @@ namespace XyGraph
             List<string> outputNames = new List<string>();
             foreach (Port port in ports)
             {
-                if (port.type == PortType.Output)
+                if (port.direction == PortDirection.Output)
                 {
                     outputNames.Add(port.name);
                 }

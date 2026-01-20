@@ -21,10 +21,7 @@ namespace XyGraph
 
 
             //create port
-            Port port = new Port("", PortType.Input, this, 20);
-            port.isEditable = false;
-            port.isRemovable = false;
-            port.socket.Background = Brushes.Black;
+            Port port = new Port("", PortDirection.Input, typeof(Node), 20, Brushes.Black);
 
             // create border around port
             Border outline = new Border

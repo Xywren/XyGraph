@@ -10,6 +10,7 @@ namespace XyGraph
     public partial class GraphView : UserControl
     {
         private const double WORLD_SIZE = 10000;
+        private const int VISUAL_TREE_SEARCH_DEPTH = 10;
         // Cached transforms for the inner graph to avoid repeated visual-tree searches
         private TransformGroup transformGroup;
         private ScaleTransform scaleTransform;
@@ -48,6 +49,20 @@ namespace XyGraph
             this.MouseMove += GraphView_MouseMove;
             this.MouseLeftButtonUp += GraphView_MouseLeftButtonUp;
             this.MouseRightButtonDown += GraphView_MouseRightButtonDown;
+        }
+
+        // Walk up to VISUAL_TREE_SEARCH_DEPTH ancestors to find a Socket. Returns null if none found.
+        private Socket GetSocketFromSource(object source)
+        {
+            DependencyObject element = source as DependencyObject;
+            int depth = 0;
+            while (element != null && element != graph && depth < VISUAL_TREE_SEARCH_DEPTH)
+            {
+                if (element is Socket s) return s;
+                element = VisualTreeHelper.GetParent(element);
+                depth++;
+            }
+            return null;
         }
 
         // Expose a helper to run the graph's start node from higher-level UIs
@@ -187,19 +202,14 @@ namespace XyGraph
         {
             if (mouseState != MouseState.None) return;
 
-            if (e.OriginalSource is Socket clickedSocket)
+            // if a socket (or a child of a socket) was clicked, start creating an edge
+            Socket clickedSocket = GetSocketFromSource(e.OriginalSource);
+            if (clickedSocket != null)
             {
-                // prefer the explicit socket.port but fall back to walking up the visual tree
-                // in case socket.port was not set for some reason (eg. templating / deserialization issues)
                 edgeStartPort = clickedSocket.port;
                 if (edgeStartPort == null)
                 {
-                    DependencyObject parent = clickedSocket;
-                    while (parent != null && parent != graph)
-                    {
-                        if (parent is Port p) { edgeStartPort = p; break; }
-                        parent = VisualTreeHelper.GetParent(parent);
-                    }
+                    edgeStartPort = clickedSocket.port;
                 }
                 mouseState = MouseState.CreatingEdge;
                 tempConnectionLine = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false };
@@ -289,7 +299,7 @@ namespace XyGraph
                         // convert viewport mouse to content/canvas coords
                         Point mousePosContent = ViewportToCanvas(viewportPos);
                         // start position of socket in canvas coords
-                        int startOffset = edgeStartPort.socket.size / 2;
+                        int startOffset = (int)edgeStartPort.socket.ActualWidth/2;
                         Point startPos = edgeStartPort.socket.TranslatePoint(new Point(startOffset, startOffset), graph);
                         tempConnectionLine.X1 = startPos.X;
                         tempConnectionLine.Y1 = startPos.Y;
@@ -302,9 +312,11 @@ namespace XyGraph
                         {
                             foreach (Port p in node.ports)
                             {
-                                if (p != edgeStartPort && p.type != edgeStartPort.type)
+                                // Only consider ports that are opposite direction, not the start port, and have the same CLR type
+                                if (p != edgeStartPort && p.direction != edgeStartPort.direction &&
+                                    p.portType != null && edgeStartPort.portType != null && p.portType == edgeStartPort.portType)
                                 {
-                                    int endOffset = p.socket.size / 2;
+                                    int endOffset = (int)p.socket.ActualWidth / 2;
                                     Point portPos = p.socket.TranslatePoint(new Point(endOffset, endOffset), graph);
                                     double dist = (mousePosContent - portPos).Length;
                                     if (dist < minDist)
@@ -332,9 +344,11 @@ namespace XyGraph
                     {
                         if (targetPort != null)
                         {
-                            // create the permanent edge via Graph.CreateEdge
-                            if (edgeStartPort != null)
+                            // Only create the edge if the two ports have the same CLR type
+                            if (edgeStartPort != null && edgeStartPort.portType != null && targetPort.portType != null && edgeStartPort.portType == targetPort.portType)
+                            {
                                 graph.CreateEdge(edgeStartPort, targetPort);
+                            }
                         }
                         if (tempConnectionLine != null)
                         {
