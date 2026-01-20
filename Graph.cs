@@ -159,6 +159,14 @@ namespace XyGraph
 
             while(nodes.Count >0)
                 nodes[0].Delete();
+
+            if (startItem != null)
+                startItem.IsEnabled = true;
+            if (endItem != null)
+                endItem.IsEnabled = true;
+
+            startNode = null;
+            endNode = null;
         }
 
         // save graph into a JsonObject
