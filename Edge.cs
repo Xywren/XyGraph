@@ -33,19 +33,13 @@ namespace XyGraph
             fromPort.ConnectionMade(this);
             toPort.ConnectionMade(this);
 
+            // bind port-backed members to peer nodes when connection is made
+            TryBindPortToPeer(fromPort, toPort.parentContainer?.node);
+            TryBindPortToPeer(toPort, fromPort.parentContainer?.node);
+
             var fromNode = fromPort.parentContainer.node;
             var toNode = toPort.parentContainer.node;
 
-
-            if (fromPort.direction == PortDirection.Input)
-                fromNode.inputs.Add(toNode);
-            else
-                fromNode.outputs.Add(toNode);
-
-            if (toPort.direction == PortDirection.Input)
-                toNode.inputs.Add(fromNode);
-            else
-                toNode.outputs.Add(fromNode);
 
         }
 
@@ -97,8 +91,103 @@ namespace XyGraph
 
         public void Delete()
         {
+            // unbind port-backed members before removing edge
+            TryUnbindPortFromPeer(fromPort, toPort.parentContainer?.node);
+            TryUnbindPortFromPeer(toPort, fromPort.parentContainer?.node);
+
             graph.Children.Remove(visual);
             graph.edges.Remove(this);
+        }
+
+
+        // Magic happens here
+        // Uses Reflection to connect Nodes via their ports
+        private void TryBindPortToPeer(Port port, Node peer)
+        {
+            if (port == null || peer == null || port.ownerMember == null) return;
+
+            Node ownerNode = port.parentContainer?.node;
+            if (ownerNode == null) return;
+
+            try
+            {
+                if (port.ownerMember is System.Reflection.FieldInfo fi)
+                {
+                    if (typeof(Node).IsAssignableFrom(fi.FieldType))
+                    {
+                        fi.SetValue(ownerNode, peer);
+                    }
+                    else if (typeof(System.Collections.IList).IsAssignableFrom(fi.FieldType))
+                    {
+                        object listObj = fi.GetValue(ownerNode);
+                        var list = listObj as System.Collections.IList;
+                        if (list != null && !list.Contains(peer)) list.Add(peer);
+                    }
+                }
+                else if (port.ownerMember is System.Reflection.PropertyInfo pi)
+                {
+                    if (!pi.CanWrite) return;
+                    if (typeof(Node).IsAssignableFrom(pi.PropertyType))
+                    {
+                        pi.SetValue(ownerNode, peer);
+                    }
+                    else if (typeof(System.Collections.IList).IsAssignableFrom(pi.PropertyType))
+                    {
+                        object listObj = pi.GetValue(ownerNode);
+                        var list = listObj as System.Collections.IList;
+                        if (list != null && !list.Contains(peer)) list.Add(peer);
+                    }
+                }
+            }
+            catch
+            {
+                // ignore binding errors
+            }
+        }
+
+        private void TryUnbindPortFromPeer(Port port, Node peer)
+        {
+            if (port == null || peer == null || port.ownerMember == null) return;
+
+            Node ownerNode = port.parentContainer?.node;
+            if (ownerNode == null) return;
+
+            try
+            {
+                if (port.ownerMember is System.Reflection.FieldInfo fi)
+                {
+                    if (typeof(Node).IsAssignableFrom(fi.FieldType))
+                    {
+                        object cur = fi.GetValue(ownerNode);
+                        if (object.ReferenceEquals(cur, peer)) fi.SetValue(ownerNode, null);
+                    }
+                    else if (typeof(System.Collections.IList).IsAssignableFrom(fi.FieldType))
+                    {
+                        object listObj = fi.GetValue(ownerNode);
+                        var list = listObj as System.Collections.IList;
+                        if (list != null && list.Contains(peer)) list.Remove(peer);
+                    }
+                }
+                else if (port.ownerMember is System.Reflection.PropertyInfo pi)
+                {
+                    if (!pi.CanWrite) return;
+                    if (typeof(Node).IsAssignableFrom(pi.PropertyType))
+                    {
+                        object cur = pi.GetValue(ownerNode);
+                        if (object.ReferenceEquals(cur, peer)) pi.SetValue(ownerNode, null);
+                    }
+                    else if (typeof(System.Collections.IList).IsAssignableFrom(pi.PropertyType))
+                    {
+                        object listObj = pi.GetValue(ownerNode);
+                        var list = listObj as System.Collections.IList;
+                        if (list != null && list.Contains(peer)) list.Remove(peer);
+                    }
+                }
+            }
+            catch
+            {
+                // ignore unbind errors
+            }
         }
 
         public JsonObject Save()

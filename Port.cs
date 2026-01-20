@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.CodeDom;
 using System.Text.Json.Nodes;
 using System.Collections.Generic;
@@ -95,6 +96,7 @@ namespace XyGraph
         // non-serialised elements
         private UIElement label;
         internal NodeContainer parentContainer;
+        public MemberInfo ownerMember; // magic code that lets us set Inputs and Outputs on subclasses of Node
 
         // Edit-time properties
         public List<Edge> edges = new List<Edge>();

@@ -79,6 +79,10 @@ namespace XyGraph
         {
             base.Completed();
             // Your custom completion behaviour here
+
+
+            // once completed run the output
+            output.Run();
         }
         public override void Error()
         {

@@ -10,6 +10,8 @@ namespace XyGraph
     {
         public static readonly double OffsetX = 10;
         public static readonly double OffsetY = 10;
+        [NodeOutput(Color = "Black", SocketSize = 20, DrawOuterRing = false, Name = "")]
+        public Node outputNode;
 
         public Port port { get; private set; }
         private Graph graph;
@@ -19,21 +21,20 @@ namespace XyGraph
             title = "START";
             this.graph = graph;
 
-            //create port
-            Port port = new Port("", PortDirection.Output, typeof(Node), 20, Brushes.Black, false);
+            // the port will be created by the base via attributes; find it and move it into the main container
 
             // Hide the title container
             titleContainer.Visibility = Visibility.Collapsed;
 
             // Make backgrounds transparent
             mainContainer.Background = Brushes.Transparent;
+            outputContainer.Background = Brushes.Transparent;
             Background = Brushes.Transparent; // Remove pink background
             innerBorder.Background = Brushes.Transparent;
 
             // add START text
             TextBlock tb = new TextBlock { Text = "START", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 4) };
-            mainContainer.Add(tb);
-            mainContainer.Add(port);
+            outputContainer.Add(tb);
 
             // add right click delete context item
             this.port = port;
@@ -103,7 +104,7 @@ namespace XyGraph
         public override void Completed()
         {
             base.Completed();
-            NextNode();
+            outputNode.Run();
         }
         public override void Error()
         {

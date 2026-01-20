@@ -32,8 +32,6 @@ namespace XyGraph
         public NodeContainer bottomContainer { get; private set; }
 
         public Graph graph;
-        public List<Node> inputs = new List<Node>();
-        public List<Node> outputs = new List<Node>();
 
 
         public double SpawnOffsetX = 75;
@@ -236,8 +234,8 @@ namespace XyGraph
             BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
 
             // collect both fields and properties into a single list of work items
-            List<(MemberInfo member, Type memberType, string portName, PortDirection dir, string color, ConnectionType connType)> items =
-                new List<(MemberInfo, Type, string, PortDirection, string, ConnectionType)>();
+            List<(MemberInfo member, Type memberType, string portName, PortDirection dir, string color, ConnectionType connType, int socketSize, bool drawOuterRing)> items =
+                new List<(MemberInfo, Type, string, PortDirection, string, ConnectionType, int, bool)>();
 
             // fields
             foreach (FieldInfo field in t.GetFields(flags))
@@ -246,15 +244,29 @@ namespace XyGraph
                 NodeOutputAttribute outAttr = field.GetCustomAttribute<NodeOutputAttribute>();
                 if (inAttr == null && outAttr == null) continue;
 
-                string portName = !string.IsNullOrEmpty(inAttr?.Name) ? inAttr.Name : outAttr?.Name;
-                if (string.IsNullOrEmpty(portName)) portName = field.Name;
+                string portName;
+                if (inAttr != null)
+                {
+                    // null means use member name; empty string means explicit empty label
+                    portName = inAttr.Name != null ? inAttr.Name : field.Name;
+                }
+                else if (outAttr != null)
+                {
+                    portName = outAttr.Name != null ? outAttr.Name : field.Name;
+                }
+                else
+                {
+                    portName = field.Name;
+                }
 
                 Type memberType = field.FieldType ?? typeof(object);
                 PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
 
                 string colorName = inAttr?.Color ?? outAttr?.Color ?? "Black";
                 ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
-                items.Add((field, memberType, portName, dir, colorName, connType));
+                int socketSize = inAttr != null ? inAttr.SocketSize : outAttr.SocketSize;
+                bool drawOuterRing = inAttr != null ? inAttr.DrawOuterRing : outAttr.DrawOuterRing;
+                items.Add((field, memberType, portName, dir, colorName, connType, socketSize, drawOuterRing));
             }
 
             // properties
@@ -264,15 +276,28 @@ namespace XyGraph
                 NodeOutputAttribute outAttr = prop.GetCustomAttribute<NodeOutputAttribute>();
                 if (inAttr == null && outAttr == null) continue;
 
-                string portName = !string.IsNullOrEmpty(inAttr?.Name) ? inAttr.Name : outAttr?.Name;
-                if (string.IsNullOrEmpty(portName)) portName = prop.Name;
+                string portName;
+                if (inAttr != null)
+                {
+                    portName = inAttr.Name != null ? inAttr.Name : prop.Name;
+                }
+                else if (outAttr != null)
+                {
+                    portName = outAttr.Name != null ? outAttr.Name : prop.Name;
+                }
+                else
+                {
+                    portName = prop.Name;
+                }
 
                 Type memberType = prop.PropertyType ?? typeof(object);
                 PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
 
                 string colorName = inAttr?.Color ?? outAttr?.Color ?? "Black";
                 ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
-                items.Add((prop, memberType, portName, dir, colorName, connType));
+                int socketSize = inAttr != null ? inAttr.SocketSize : outAttr.SocketSize;
+                bool drawOuterRing = inAttr != null ? inAttr.DrawOuterRing : outAttr.DrawOuterRing;
+                items.Add((prop, memberType, portName, dir, colorName, connType, socketSize, drawOuterRing));
             }
 
             // single loop to create ports
@@ -280,9 +305,11 @@ namespace XyGraph
             foreach (var entry in items)
             {
                 Brush colorBrush = (Brush)brushConverter.ConvertFromString(entry.color);
-                Port p = new Port(entry.portName, entry.dir, entry.memberType, socketSize: 10, color: colorBrush);
+                Port p = new Port(entry.portName, entry.dir, entry.memberType, socketSize: entry.socketSize, color: colorBrush, drawSocketOuterRing: entry.drawOuterRing);
                 // override connection type from attribute if specified
                 p.connectionType = entry.connType;
+                // record the member this port came from so runtime binding can use it
+                p.ownerMember = entry.member;
 
                 if (entry.dir == PortDirection.Input)
                     inputContainer.Add(p);
@@ -505,11 +532,6 @@ namespace XyGraph
             graph.OnError(this);
         }
 
-        public virtual void NextNode(int outputIndex = 0)
-        {
-            Node nextNode = outputs[outputIndex];
-            nextNode.Run();
-        }
 
         public List<string> GetOutputs()
         {
