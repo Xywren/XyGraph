@@ -72,13 +72,12 @@ namespace XyGraph
         public override void Run()
         {
             base.Run();
-
-            // Your custom runtime behaviour here
+            // === Your custom runtime behaviour here ===
         }
         public override void Completed()
         {
             base.Completed();
-            // Your custom completion behaviour here
+            // === Your custom completion behaviour here ===
 
 
             // once completed run the output
@@ -86,7 +85,7 @@ namespace XyGraph
         }
         public override void Error()
         {
-            // Your custom error behaviour here
+            // === Your custom error behaviour here ===
 
             base.Error();
         }

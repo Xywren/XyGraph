@@ -4,11 +4,15 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Globalization;
+using System.Windows.Data;
 
 namespace XyGraph
 {
     public partial class GraphView : UserControl
     {
+        private bool sidebarSlidOff = false;
+        private System.Windows.Media.Animation.DoubleAnimation slideAnimation;
         private const double WORLD_SIZE = 10000;
         private const int VISUAL_TREE_SEARCH_DEPTH = 10;
         // Cached transforms for the inner graph to avoid repeated visual-tree searches
@@ -24,6 +28,7 @@ namespace XyGraph
         {
             InitializeComponent();
             Loaded += GraphView_Loaded;
+            SizeChanged += GraphView_SizeChanged;
 
             // Set Graph to desired Size
             graph.WorldSize = WORLD_SIZE;
@@ -49,6 +54,58 @@ namespace XyGraph
             this.MouseMove += GraphView_MouseMove;
             this.MouseLeftButtonUp += GraphView_MouseLeftButtonUp;
             this.MouseRightButtonDown += GraphView_MouseRightButtonDown;
+
+            // sidebar toggle button
+            ToggleSidebarButton.Click += ToggleSidebarButton_Click;
+        }
+
+        private void GraphView_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateSidebarLayout();
+        }
+
+        private void UpdateSidebarLayout()
+        {
+            const double toggleHalf = 14.0; // half of toggle width used for overlap
+            double totalWidth = this.ActualWidth;
+            if (double.IsNaN(totalWidth) || totalWidth <= 0.0) return;
+
+
+            // position the toggle button inside the container so it overlaps the right edge of the sidebar
+            double buttonLeft = SidebarContent.Width - toggleHalf;
+            ToggleSidebarButton.Margin = new Thickness(buttonLeft, 0, 0, 0);
+            ToggleSidebarButton.HorizontalAlignment = HorizontalAlignment.Left;
+        }
+
+        private void ToggleSidebarButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleSidebar();
+        }
+
+        private void ToggleSidebar()
+        {
+            const double animationDurationSeconds = 0.32;
+
+            if (!sidebarSlidOff)
+            {
+                double to = -SidebarContent.Width;
+                slideAnimation = new System.Windows.Media.Animation.DoubleAnimation(0, to, new Duration(TimeSpan.FromSeconds(animationDurationSeconds)));
+                slideAnimation.EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+                SidebarContainerTranslate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, slideAnimation);
+                ToggleSidebarButton.ToolTip = "Expand sidebar";
+                ToggleIconPath.Data = Geometry.Parse("M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z");
+                sidebarSlidOff = true;
+            }
+            else
+            {
+                slideAnimation = new System.Windows.Media.Animation.DoubleAnimation(SidebarContainerTranslate.X, 0, new Duration(TimeSpan.FromSeconds(animationDurationSeconds)));
+                slideAnimation.EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+                SidebarContainerTranslate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, slideAnimation);
+                ToggleSidebarButton.ToolTip = "Collapse sidebar";
+                ToggleIconPath.Data = Geometry.Parse("M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z");
+                sidebarSlidOff = false;
+            }
+            UpdateSidebarLayout();
         }
 
         // Walk up to VISUAL_TREE_SEARCH_DEPTH ancestors to find a Socket. Returns null if none found.
@@ -85,6 +142,7 @@ namespace XyGraph
             Point mapped = transformMatrix.Transform(new Point(graphOriginOffset, graphOriginOffset));
             translateTransform.X += viewportCenterX - mapped.X;
             translateTransform.Y += viewportCenterY - mapped.Y;
+            UpdateSidebarLayout();
         }
 
         public void AddNode(Node n, double posX = 0, double posY = 0)
