@@ -271,12 +271,12 @@ namespace XyGraph
                         else if (draggedNode is StartNode s)
                         {
                             foreach (Edge edge in s.port.edges)
-                                edge.UpdatePosition();
+                                edge.ReDraw();
                         }
                         else if (draggedNode is EndNode en)
                         {
                             foreach (Edge edge in en.port.edges)
-                                edge.UpdatePosition();
+                                edge.ReDraw();
                         }
                     }
                     break;

@@ -31,4 +31,19 @@ namespace XyGraph
         // whether to draw outer ring around socket
         public bool DrawOuterRing { get; set; } = true;
     }
+
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, Inherited = true, AllowMultiple = false)]
+    public sealed class NodeMultiOutputAttribute : Attribute
+    {
+        // Optional override for the port display name. Null means use member name; empty string means show no label.
+        public string Name { get; set; } = null;
+        // Optional color name or hex for the port socket (defaults to Black)
+        public string Color { get; set; } = "Black";
+        // Connection type: default for multi-outputs is Multi
+        public ConnectionType ConnectionType { get; set; } = ConnectionType.Multi;
+        // Optional socket size
+        public int SocketSize { get; set; } = 10;
+        // whether to draw outer ring around socket
+        public bool DrawOuterRing { get; set; } = true;
+    }
 }

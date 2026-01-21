@@ -126,7 +126,7 @@ namespace XyGraph
             }
 
             Edge conn = new Edge(this, from, to);
-            conn.UpdatePosition();
+            conn.ReDraw();
             Children.Add(conn.visual);
             edges.Add(conn);
 

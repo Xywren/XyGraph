@@ -43,6 +43,25 @@ namespace XyGraph
             }
         }
 
+        public void InsertAt(int index, UIElement child)
+        {
+            if (index < 0) index = 0;
+            if (index > stackPanel.Children.Count) index = stackPanel.Children.Count;
+            stackPanel.Children.Insert(index, child);
+            Visibility = Visibility.Visible;
+            if (child is Port port)
+            {
+                // insert into node ports list at corresponding position
+                node.ports.Add(port);
+                port.parentContainer = this;
+            }
+        }
+
+        public int IndexOf(UIElement child)
+        {
+            return stackPanel.Children.IndexOf(child);
+        }
+
         public void Remove(UIElement child)
         {
             stackPanel.Children.Remove(child);
@@ -50,7 +69,6 @@ namespace XyGraph
             if (child is Port port)
             {
                 node.ports.Remove(port);
-                //node.PortsChanged();
             }
 
             // if no more chldren, hide container

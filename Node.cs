@@ -1,5 +1,6 @@
 using System;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -46,94 +47,13 @@ namespace XyGraph
             }
         } = "Title";
 
-        // Outline properties: default blue outline, customizable via dependency properties
-        public static readonly DependencyProperty OutlineBrushProperty = DependencyProperty.Register(
-            nameof(OutlineBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Blue, OnOutlineBrushChanged));
-
-        public Brush OutlineBrush
-        {
-            get => (Brush)GetValue(OutlineBrushProperty);
-            set => SetValue(OutlineBrushProperty, value);
-        }
-
-        public static readonly DependencyProperty OutlineThicknessProperty = DependencyProperty.Register(
-            nameof(OutlineThickness), typeof(double), typeof(Node), new PropertyMetadata(3.0, OnOutlineThicknessChanged));
-
-        public double OutlineThickness
-        {
-            get => (double)GetValue(OutlineThicknessProperty);
-            set => SetValue(OutlineThicknessProperty, value);
-        }
-
-        // Brushes per state
-        public static readonly DependencyProperty OutlineRunningBrushProperty = DependencyProperty.Register(
-            nameof(OutlineRunningBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Blue, OnOutlineBrushChanged));
-
-        public Brush OutlineRunningBrush
-        {
-            get => (Brush)GetValue(OutlineRunningBrushProperty);
-            set => SetValue(OutlineRunningBrushProperty, value);
-        }
-
-        public static readonly DependencyProperty OutlineCompletedBrushProperty = DependencyProperty.Register(
-            nameof(OutlineCompletedBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Green, OnOutlineBrushChanged));
-
-        public Brush OutlineCompletedBrush
-        {
-            get => (Brush)GetValue(OutlineCompletedBrushProperty);
-            set => SetValue(OutlineCompletedBrushProperty, value);
-        }
-
-        public static readonly DependencyProperty OutlineErrorBrushProperty = DependencyProperty.Register(
-            nameof(OutlineErrorBrush), typeof(Brush), typeof(Node), new PropertyMetadata(Brushes.Red, OnOutlineBrushChanged));
-
-        public Brush OutlineErrorBrush
-        {
-            get => (Brush)GetValue(OutlineErrorBrushProperty);
-            set => SetValue(OutlineErrorBrushProperty, value);
-        }
-
-        private static void OnOutlineBrushChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is Node n)
-            {
-                n.BorderBrush = e.NewValue as Brush;
-            }
-        }
-
-        private static void OnOutlineThicknessChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is Node n)
-            {
-                double v = 0.0;
-                if (e.NewValue is double dv) v = dv;
-                n.BorderThickness = new Thickness(v);
-                if (n.innerBorder != null)
-                {
-                    n.innerBorder.CornerRadius = new CornerRadius(Math.Max(0, CORNER_RADIUS - (int)v));
-                }
-            }
-        }
-
-        public static readonly DependencyProperty OutlineGapProperty = DependencyProperty.Register(
-            nameof(OutlineGap), typeof(double), typeof(Node), new PropertyMetadata(2.0, OnOutlineGapChanged));
-
-        public double OutlineGap
-        {
-            get => (double)GetValue(OutlineGapProperty);
-            set => SetValue(OutlineGapProperty, value);
-        }
-
-        private static void OnOutlineGapChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            if (d is Node n)
-            {
-                double gap = 0.0;
-                if (e.NewValue is double gd) gap = gd;
-                // set outer padding to create a gap between node edge and inner content (outline separation)
-                n.Padding = new Thickness(gap);
-            }
-        }
+        // Node status outline properties
+        public Brush OutlineBrush = Brushes.Blue;
+        public double OutlineThickness = 3.0;
+        public Brush OutlineRunningBrush = Brushes.Blue;
+        public Brush OutlineCompletedBrush = Brushes.Green;
+        public Brush OutlineErrorBrush = Brushes.Red;
+        public double OutlineGap = 2.0; // gap between outer border and inner content
 
         private TextBlock titleTextBlock;
 
@@ -141,22 +61,15 @@ namespace XyGraph
         {
             guid = Guid.NewGuid();
 
+            // main node border (you should never see this so bright pink shoudl stand out)
             this.graph = graph;
-            Background = Brushes.Magenta;
             CornerRadius = new CornerRadius(CORNER_RADIUS);
-            // initialize outline visuals from dependency properties
-            BorderBrush = OutlineBrush;
-            BorderThickness = new Thickness(OutlineThickness);
 
-            // create inner grid and keep reference to it
+            // create grid structure of nodes
             grid = new Grid();
-
-            // Column definitions
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            // Row definitions
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Title
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Top
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Middle
@@ -201,29 +114,37 @@ namespace XyGraph
             grid.Children.Add(bottomContainer);
             bottomContainer.CornerRadius = new CornerRadius(0, 0, CORNER_RADIUS, CORNER_RADIUS);
 
-            // create an inner border to render node background inset from the outer outline
+            // the main panel of the node (you should never see this, so bright pink should stand out)
             innerBorder = new Border();
-            innerBorder.Background = this.Background;
+            innerBorder.Background = Brushes.Magenta;
             innerBorder.CornerRadius = new CornerRadius(Math.Max(0, CORNER_RADIUS - (int)OutlineThickness));
             innerBorder.Child = grid;
 
             // outer border (this) will act as the outline; make its background transparent so gap shows
             this.Background = Brushes.Transparent;
             this.Padding = new Thickness(OutlineGap);
-
             Child = innerBorder;
+
+            // create context menu to delete this node
             ContextMenu = new ContextMenu();
             MenuItem deleteItem = new MenuItem { Header = "Delete Node" };
             deleteItem.Click += (s, e) => this.Delete();
             ContextMenu.Items.Add(deleteItem);
 
+            // add a textblock to show this node's title
             titleTextBlock = new TextBlock { Text = title, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
             titleContainer.Add(titleTextBlock);
             titleContainer.Visibility = Visibility.Visible;
 
-            // set initial outline based on state
             UpdateOutlineForState();
 
+            // nodes should have no outline by default
+            this.BorderBrush = Brushes.Transparent;
+            this.BorderThickness = new Thickness(OutlineThickness);
+            this.Padding = new Thickness(OutlineGap);
+
+
+            // automatically creates Input and Output ports based on sub-class atributes
             InitializePortsFromAttributes();
         }
 
@@ -232,85 +153,66 @@ namespace XyGraph
         {
             Type t = this.GetType();
             BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+            HandleNodePortAttributes(t, flags);
+            HandleNodeMultiPortAttributes(t, flags);
+        }
 
-            // collect both fields and properties into a single list of work items
+        //Handles the creation of ports for this node based on NodeInput and NodeOutput attributes
+        private void HandleNodePortAttributes(Type t, BindingFlags flags)
+        {
+            // create a list of port metedata (this is all data required to construct ports)
             List<(MemberInfo member, Type memberType, string portName, PortDirection dir, string color, ConnectionType connType, int socketSize, bool drawOuterRing)> items =
                 new List<(MemberInfo, Type, string, PortDirection, string, ConnectionType, int, bool)>();
 
-            // fields
-            foreach (FieldInfo field in t.GetFields(flags))
+            //loop through all members in this class type
+            foreach (MemberInfo member in t.GetMembers(flags))
             {
-                NodeInputAttribute inAttr = field.GetCustomAttribute<NodeInputAttribute>();
-                NodeOutputAttribute outAttr = field.GetCustomAttribute<NodeOutputAttribute>();
+                // we only care about fields and properties
+                FieldInfo? asField = member as FieldInfo;
+                PropertyInfo? asProp = member as PropertyInfo;
+                if (asField == null && asProp == null) continue;
+
+                //if this field has neither a NodeInput nor NodeOutput attribute, skip it
+                NodeInputAttribute inAttr = member.GetCustomAttribute<NodeInputAttribute>();
+                NodeOutputAttribute outAttr = member.GetCustomAttribute<NodeOutputAttribute>();
                 if (inAttr == null && outAttr == null) continue;
 
+                // Get the a name of this port:
+                //  - if this attribute has specified a Name, use that
+                //  - otherwise, use the name of the field itself
                 string portName;
-                if (inAttr != null)
-                {
-                    // null means use member name; empty string means explicit empty label
-                    portName = inAttr.Name != null ? inAttr.Name : field.Name;
-                }
-                else if (outAttr != null)
-                {
-                    portName = outAttr.Name != null ? outAttr.Name : field.Name;
-                }
-                else
-                {
-                    portName = field.Name;
-                }
+                if (inAttr != null) portName = inAttr.Name != null ? inAttr.Name : member.Name;
+                else if (outAttr != null) portName = outAttr.Name != null ? outAttr.Name : member.Name;
+                else portName = member.Name;
 
-                Type memberType = field.FieldType ?? typeof(object);
+                // Record the System.Type type of this field
+                Type memberType = (asField != null) ? (asField.FieldType ?? typeof(object)) : (asProp != null ? (asProp.PropertyType ?? typeof(object)) : typeof(object));
+
+                // Get port Data from the Attribute, if none provided, use default values
                 PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
-
                 string colorName = inAttr?.Color ?? outAttr?.Color ?? "Black";
                 ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
                 int socketSize = inAttr != null ? inAttr.SocketSize : outAttr.SocketSize;
                 bool drawOuterRing = inAttr != null ? inAttr.DrawOuterRing : outAttr.DrawOuterRing;
-                items.Add((field, memberType, portName, dir, colorName, connType, socketSize, drawOuterRing));
+
+                // add this ports metadata to the list
+                items.Add((member, memberType, portName, dir, colorName, connType, socketSize, drawOuterRing));
             }
 
-            // properties
-            foreach (PropertyInfo prop in t.GetProperties(flags))
-            {
-                NodeInputAttribute inAttr = prop.GetCustomAttribute<NodeInputAttribute>();
-                NodeOutputAttribute outAttr = prop.GetCustomAttribute<NodeOutputAttribute>();
-                if (inAttr == null && outAttr == null) continue;
-
-                string portName;
-                if (inAttr != null)
-                {
-                    portName = inAttr.Name != null ? inAttr.Name : prop.Name;
-                }
-                else if (outAttr != null)
-                {
-                    portName = outAttr.Name != null ? outAttr.Name : prop.Name;
-                }
-                else
-                {
-                    portName = prop.Name;
-                }
-
-                Type memberType = prop.PropertyType ?? typeof(object);
-                PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
-
-                string colorName = inAttr?.Color ?? outAttr?.Color ?? "Black";
-                ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
-                int socketSize = inAttr != null ? inAttr.SocketSize : outAttr.SocketSize;
-                bool drawOuterRing = inAttr != null ? inAttr.DrawOuterRing : outAttr.DrawOuterRing;
-                items.Add((prop, memberType, portName, dir, colorName, connType, socketSize, drawOuterRing));
-            }
-
-            // single loop to create ports
+            // used to convert string hex codes ("#FF00FF") into Brushes
             BrushConverter brushConverter = new BrushConverter();
+
+            // Loop over all the metadata in the list and create the Port UI elements and add them to the node
             foreach (var entry in items)
             {
                 Brush colorBrush = (Brush)brushConverter.ConvertFromString(entry.color);
+
+                // Create the Port
                 Port p = new Port(entry.portName, entry.dir, entry.memberType, socketSize: entry.socketSize, color: colorBrush, drawSocketOuterRing: entry.drawOuterRing);
-                // override connection type from attribute if specified
                 p.connectionType = entry.connType;
-                // record the member this port came from so runtime binding can use it
                 p.ownerMember = entry.member;
 
+                // add the ports to the appropriate nodeContainer
                 if (entry.dir == PortDirection.Input)
                     inputContainer.Add(p);
                 else
@@ -318,7 +220,118 @@ namespace XyGraph
             }
         }
 
+        private void HandleNodeMultiPortAttributes(Type t, BindingFlags flags)
+        {
+            // used to convert string hex codes ("#FF00FF") into Brushes
+            BrushConverter brushConverter = new BrushConverter();
 
+            //loop through all members in this class type
+            foreach (MemberInfo member in t.GetMembers(flags))
+            {
+                //if this field has not got a NodeMultiOutput, skip it
+                NodeMultiOutputAttribute multiAttr = member.GetCustomAttribute<NodeMultiOutputAttribute>();
+                if (multiAttr == null) continue;
+
+                // Create a single "Add Output" button for this multi-output member.
+                Button addBtn = new Button { Content = "Add Output", FontSize = 8, Height = 20, HorizontalAlignment = HorizontalAlignment.Left };
+                addBtn.Tag = member.Name; // mark the button so we can find it later
+
+                // Expose unified accessors for the member so we don't duplicate field/property logic
+                FieldInfo? fieldInfo = member as FieldInfo;
+                PropertyInfo? propInfo = member as PropertyInfo;
+                Type memberType = (fieldInfo != null) ? (fieldInfo.FieldType ?? typeof(object)) : (propInfo != null ? (propInfo.PropertyType ?? typeof(object)) : typeof(object));
+                System.Func<object> getter = () => (fieldInfo != null) ? fieldInfo.GetValue(this) : (propInfo != null ? propInfo.GetValue(this) : null);
+                System.Action<object> setter = (object v) => { if (fieldInfo != null) fieldInfo.SetValue(this, v); else if (propInfo != null) propInfo.SetValue(this, v); };
+
+                // When the user clicks the button, create a new list slot (null) in the backing List<T>, then create a MultiPort UI
+                addBtn.Click += (s, e) =>
+                {
+                    // figure out the element type of the list (T in List<T>)
+                    Type elementType = typeof(object);
+                    if (memberType.IsGenericType)
+                    {
+                        Type[] args = memberType.GetGenericArguments();
+                        if (args != null && args.Length > 0) elementType = args[0];
+                    }
+
+                    // Ensure the backing list is instantiated, if not it will instantiate it for you
+                    // TLDR: magically turns "[NodeMultiOutput] public List<int> myOutputs;" into "[NodeMultiOutput] public List<int> myOutputs = new List<int>();" if you didnt initialize it yourself
+                    IList listRef = null;
+                    try
+                    {
+                        object existing = getter();
+                        if (existing is IList l) listRef = l;
+                        else
+                        {
+                            Type listType = typeof(List<>).MakeGenericType(new Type[] { elementType });
+                            listRef = (IList)Activator.CreateInstance(listType)!;
+                            setter(listRef);
+                        }
+                    }
+                    catch { }
+
+                    // add a new empty slot to the output list
+                    int newIndex = -1;
+                    if (listRef != null)
+                    {
+                        listRef.Add(null);
+                        newIndex = listRef.Count - 1;
+                    }
+
+                    // create the MultiPort UI from metadata
+                    MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: (Brush)brushConverter.ConvertFromString(multiAttr.Color), drawSocketOuterRing: multiAttr.DrawOuterRing);
+
+                    // keep track of which node, and which field in that node owns this list, and which element in this list this port belongs to
+                    mp.ownerMember = member;
+                    mp.ownerMemberName = member.Name;
+                    mp.ownerIndex = newIndex;
+
+                    // insert the new port visually immediately after the add button so it appears under the button
+                    int btnIndex = outputContainer.IndexOf(addBtn);
+                    int insertAt = btnIndex + 1 + Math.Max(0, newIndex);
+                    outputContainer.InsertAt(insertAt, mp);
+                };
+
+                // Add the Button to the node
+                outputContainer.Add(addBtn);
+
+                // If the list already has elements (e.g., from initialization or load), create ports for each
+                try
+                {
+                    // double check that this field/property is a List, if so loop through it
+                    object existing = getter();
+                    if (existing is System.Collections.IList existingList)
+                    {
+                        for (int i = 0; i < existingList.Count; i++)
+                        {
+                            // Get the element type T from a List<T> member (default to object if the member isn't generic)
+                            Type elementType = typeof(object);
+                            if (memberType.IsGenericType)
+                            {
+                                Type[] args = memberType.GetGenericArguments();
+                                if (args != null && args.Length > 0) elementType = args[0];
+                            }
+
+                            // create a MultiPort for each existing list slot and insert after the add button
+                            MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: (Brush)brushConverter.ConvertFromString(multiAttr.Color), drawSocketOuterRing: multiAttr.DrawOuterRing);
+                            
+                            // keep track of which node, and which member in that node owns this list, and which element in this list this port belongs to
+                            mp.ownerMember = member;
+                            mp.ownerMemberName = member.Name;
+                            mp.ownerIndex = i;
+
+                            // insert the new port visually immediately after the add button so it appears under the button
+                            int btnIndex = outputContainer.IndexOf(addBtn);
+                            int insertAt = btnIndex + 1 + i;
+                            outputContainer.InsertAt(insertAt, mp);
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // set colour of the node outline based on this nodes state
         private void UpdateOutlineForState()
         {
             switch (state)
@@ -373,7 +386,7 @@ namespace XyGraph
         {
             foreach (Edge e in GetAllEdges())
             {
-                e.UpdatePosition();
+                e.ReDraw();
             }
         }
 
@@ -410,17 +423,13 @@ namespace XyGraph
             return obj;
         }
 
-        // due to inheritence
-        // (derived classes must override this funcion to load in their own custom properties)
-        // we cannot use a static load Function like the other Load functions.
-        // in this instance, you must create a dummy instance of the Node's type and then call Load() on it
         public virtual void Load(JsonObject obj)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
 
             guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? guid.ToString());
 
-            // loaded coordinates are centered world coordinates; convert to canvas coords
+            // convert saved position to canvas coords and postition node
             double centeredX = obj["x"]?.GetValue<double>() ?? 0.0;
             double centeredY = obj["y"]?.GetValue<double>() ?? 0.0;
             Point point = new Point(centeredX, centeredY);
@@ -430,15 +439,20 @@ namespace XyGraph
 
             // remove any existing ports to avoid duplicates when re-loading
             while (ports.Count > 0)
-            {
-                // Port.Delete will remove the visual from its parent container and remove it from this.ports
                 ports[0].Delete();
-            }
 
+
+
+
+        #region Unholy Reflection Port Loading Ritual 
             // load ports that belong to this node
             JsonArray portsArray = obj["ports"] as JsonArray;
             if (portsArray != null)
             {
+                // defer multi-ports that include owner metadata so we can resolve members and insert at the correct index
+                List<Port> deferredMultiPorts = new List<Port>();
+
+                // for each port (in JSON form) in this JSON array
                 foreach (JsonNode? item in portsArray)
                 {
                     JsonObject portObj = item as JsonObject;
@@ -447,12 +461,268 @@ namespace XyGraph
                     // create port via static loader
                     Port p = Port.Load(portObj, this);
 
-                    if (p.direction == PortDirection.Input)
-                        inputContainer.Add(p);
+                    // If the saved port did not include explicit owner metadata (ownerMemberName)
+                    if (string.IsNullOrEmpty(p.ownerMemberName))
+                    {
+                        BindingFlags resolveFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+                        MemberInfo resolved = null;
+
+                        // Loop through all fields
+                        foreach (FieldInfo field in this.GetType().GetFields(resolveFlags))
+                        {
+                            //if not at NodeInput or NodeOutput attribute, skip
+                            NodeInputAttribute inAttr = field.GetCustomAttribute<NodeInputAttribute>();
+                            NodeOutputAttribute outAttr = field.GetCustomAttribute<NodeOutputAttribute>();
+                            if (inAttr == null && outAttr == null) continue;
+
+                            // get the expected name of this port based on attribute or field name
+                            string expectedName;
+                            if (inAttr != null) expectedName = inAttr.Name != null ? inAttr.Name : field.Name;
+                            else expectedName = outAttr.Name != null ? outAttr.Name : field.Name;
+
+                            // assume all NodeInputs are Input ports, NodeOutputs are Output ports
+                            PortDirection expectedDir = inAttr != null ? PortDirection.Input : PortDirection.Output;
+
+
+                            // If Attribute direction and name match the loaded port, we've
+                            // found the member that originally declared this port.
+                            if (expectedDir == p.direction && string.Equals(expectedName ?? string.Empty, p.name ?? string.Empty, StringComparison.Ordinal))
+                            {
+                                // remember which field created this port for later binding
+                                resolved = field;
+                                break;
+                            }
+                        }
+
+                        // if not found a field that created this port, search properties
+                        if (resolved == null)
+                        {
+                            // Loop through all properties
+                            foreach (PropertyInfo prop in this.GetType().GetProperties(resolveFlags))
+                            {
+                                //if not at NodeInput or NodeOutput attribute, skip
+                                NodeInputAttribute inAttr = prop.GetCustomAttribute<NodeInputAttribute>();
+                                NodeOutputAttribute outAttr = prop.GetCustomAttribute<NodeOutputAttribute>();
+                                if (inAttr == null && outAttr == null) continue;
+
+                                // get the expected name of this port based on attribute or field name
+                                string expectedName;
+                                if (inAttr != null) expectedName = inAttr.Name != null ? inAttr.Name : prop.Name;
+                                else expectedName = outAttr.Name != null ? outAttr.Name : prop.Name;
+
+                                // assume all NodeInputs are Input ports, NodeOutputs are Output ports
+                                PortDirection expectedDir = inAttr != null ? PortDirection.Input : PortDirection.Output;
+
+                                // If Attribute direction and name match the loaded port, we've
+                                // found the member that originally declared this port.
+                                if (expectedDir == p.direction && string.Equals(expectedName ?? string.Empty, p.name ?? string.Empty, StringComparison.Ordinal))
+                                {
+                                    // remember which field created this port for later binding
+                                    resolved = prop;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If we found which member created this port, set it as this ports Owner
+                        if (resolved != null)
+                        {
+                            p.ownerMember = resolved;
+                        }
+                    }
+
+                    // If the port contains owner metadata and an index, It is a [NodeMultiOutput] and not a [NodeInput] or [NodeOutput]
+                    // defer it for later - these ports are more complex to recreate and use different logic
+                    if (!string.IsNullOrEmpty(p.ownerMemberName) && p.ownerIndex >= 0 && p.direction == PortDirection.Output)
+                    {
+                        deferredMultiPorts.Add(p);
+                    }
+                    // if this is not a multi-output-port, add it now
                     else
-                        outputContainer.Add(p);
+                    {
+                        // add the ports to the appropriate nodeContainer
+                        if (p.direction == PortDirection.Input)
+                            inputContainer.Add(p);
+                        else
+                            outputContainer.Add(p);
+                    }
+                }
+
+                // Now process the more complicated MultiPorts that ew deferred for later
+
+                Type nodeType = this.GetType();
+                BindingFlags flagsLocal = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+
+                // for each deferred multi-port
+                foreach (Port mp in deferredMultiPorts)
+                {
+                    // find the member (field or property) on this node that owns the list backing these ports
+                    MemberInfo ownerMember = nodeType.GetField(mp.ownerMemberName, flagsLocal) as MemberInfo ?? nodeType.GetProperty(mp.ownerMemberName, flagsLocal) as MemberInfo;
+                    if (ownerMember != null)
+                    {
+                        // tie the loaded metadata to the resolved member so later code can use it
+                        mp.ownerMember = ownerMember;
+
+                        if (ownerMember is FieldInfo fi && typeof(System.Collections.IList).IsAssignableFrom(fi.FieldType))
+                        {
+                            // attempts to parse the runtime object as a List<T> for the
+                            // multi-output owner member (e.g. List<Node>)
+                            object listObj = fi.GetValue(this);
+                            System.Collections.IList list = listObj as System.Collections.IList;
+
+
+                            // Ensure the backing list is instantiated, if not it will instantiate it for you
+                            // TLDR: magically turns "[NodeMultiOutput] public List<int> myOutputs;" into "[NodeMultiOutput] public List<int> myOutputs = new List<int>();" if you didnt initialize it yourself
+                            if (list == null)
+                            {
+                                Type elemType = fi.FieldType.IsGenericType ? fi.FieldType.GetGenericArguments()[0] : typeof(object);
+                                Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(new Type[] { elemType });
+                                list = (System.Collections.IList)Activator.CreateInstance(listType);
+                                fi.SetValue(this, list);
+                            }
+
+                            // if this Port's index is 5, ensure the list has at least 6 slots so index [5] is valid
+                            while (list.Count <= mp.ownerIndex) list.Add(null);
+
+                            // Determine type T in List<T>
+                            Type elemTypeForPort = fi.FieldType.IsGenericType ? fi.FieldType.GetGenericArguments()[0] : typeof(object);
+
+                            // load [NodeMultiOutput] attribute metadata
+                            NodeMultiOutputAttribute multiAttr = fi.GetCustomAttribute<NodeMultiOutputAttribute>();
+                            int socketSize = multiAttr?.SocketSize ?? 10;
+                            Brush colorBrush = Brushes.Black;
+                            bool drawOuter = multiAttr?.DrawOuterRing ?? true;
+                            if (multiAttr != null)
+                            {
+                                // try to use the color specified on the attribute, fall back to black
+                                try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(multiAttr.Color)); } catch { colorBrush = Brushes.Black; }
+                            }
+
+                            // create a MultiPort
+                            MultiPort newMp = new MultiPort(mp.name, PortDirection.Output, elemTypeForPort, socketSize: socketSize, color: colorBrush, drawSocketOuterRing: drawOuter);
+
+                            // carry over important serialized state (ids, connection mode, owner metadata)
+                            newMp.guid = mp.guid;
+                            newMp.connectionType = mp.connectionType;
+                            newMp.ownerIndex = mp.ownerIndex;
+                            newMp.ownerMemberName = mp.ownerMemberName;
+                            newMp.ownerMember = ownerMember;
+
+                            // try to preserve the saved colour if present
+                            try { newMp.colour = mp.colour; } catch { }
+
+                            // find the add-button for this [NodeMultiOutput]
+                            int addBtnIndex = -1;
+                            if (outputContainer.Child is StackPanel sp)
+                            {
+                                for (int i = 0; i < sp.Children.Count; i++)
+                                {
+                                    if (sp.Children[i] is Button b && (b.Tag as string) == mp.ownerMemberName)
+                                    {
+                                        addBtnIndex = i;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Add these MultiPorts underneath their "Add Output" button.
+                            if (addBtnIndex >= 0)
+                            {
+                                int insertAt = addBtnIndex + 1 + Math.Max(0, mp.ownerIndex);
+                                outputContainer.InsertAt(insertAt, newMp);
+                            }
+                            // if we cant find the button, just add them to the end of the container
+                            else
+                            {
+                                outputContainer.Add(newMp);
+                            }
+                        }
+
+                        // same code for properties
+                        else if (ownerMember is PropertyInfo pi && typeof(System.Collections.IList).IsAssignableFrom(pi.PropertyType))
+                        {
+                            // attempts to parse the runtime object as a List<T> for the
+                            // multi-output owner member (e.g. List<Node>)
+                            object listObj = pi.GetValue(this);
+                            System.Collections.IList list = listObj as System.Collections.IList;
+
+
+                            // Ensure the backing list is instantiated, if not it will instantiate it for you
+                            // TLDR: magically turns "[NodeMultiOutput] public List<int> myOutputs;" into "[NodeMultiOutput] public List<int> myOutputs = new List<int>();" if you didnt initialize it yourself
+                            if (list == null)
+                            {
+                                Type elemType = pi.PropertyType.IsGenericType ? pi.PropertyType.GetGenericArguments()[0] : typeof(object);
+                                Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(new Type[] { elemType });
+                                list = (System.Collections.IList)Activator.CreateInstance(listType);
+                                pi.SetValue(this, list);
+                            }
+
+                            // if this Port's index is 5, ensure the list has at least 6 slots so index [5] is valid
+                            while (list.Count <= mp.ownerIndex) list.Add(null);
+
+                            // Determine type T in List<T>
+                            Type elemTypeForPort = pi.PropertyType.IsGenericType ? pi.PropertyType.GetGenericArguments()[0] : typeof(object);
+
+                            // load [NodeMultiOutput] attribute metadata
+                            NodeMultiOutputAttribute multiAttr = pi.GetCustomAttribute<NodeMultiOutputAttribute>();
+                            int socketSize = multiAttr?.SocketSize ?? 10;
+                            Brush colorBrush = Brushes.Black;
+                            bool drawOuter = multiAttr?.DrawOuterRing ?? true;
+                            if (multiAttr != null)
+                            {
+                                try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(multiAttr.Color)); } catch { colorBrush = Brushes.Black; }
+                            }
+
+                            // create a MultiPort
+                            MultiPort newMp = new MultiPort(mp.name, PortDirection.Output, elemTypeForPort, socketSize: socketSize, color: colorBrush, drawSocketOuterRing: drawOuter);
+
+                            // carry over important serialized state (ids, connection mode, owner metadata)
+                            newMp.guid = mp.guid;
+                            newMp.connectionType = mp.connectionType;
+                            newMp.ownerIndex = mp.ownerIndex;
+                            newMp.ownerMemberName = mp.ownerMemberName;
+                            newMp.ownerMember = ownerMember;
+                            try { newMp.colour = mp.colour; } catch { }
+
+                            int addBtnIndex = -1;
+                            if (outputContainer.Child is StackPanel sp2)
+                            {
+                                for (int i = 0; i < sp2.Children.Count; i++)
+                                {
+                                    if (sp2.Children[i] is Button b && (b.Tag as string) == mp.ownerMemberName)
+                                    {
+                                        addBtnIndex = i;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Add these MultiPorts underneath their "Add Output" button.
+                            if (addBtnIndex >= 0)
+                            {
+                                int insertAt = addBtnIndex + 1 + Math.Max(0, mp.ownerIndex);
+                                outputContainer.InsertAt(insertAt, newMp);
+                            }
+                            // if we cant find the button, just add them to the end of the container
+                            else
+                            {
+                                outputContainer.Add(newMp);
+                            }
+                        }
+                        else
+                        {
+                            // couldn't find a list-backed member for this saved multi-port; fail loudly
+                            throw new InvalidOperationException($"Saved multi-port refers to member '{mp.ownerMemberName}' but that member is not a List on type '{this.GetType().FullName}'.");
+                        }
+                    }
+                    else
+                    {
+                        // owner member name didn't resolve; fail loudly so caller can detect bad/legacy save data
+                        throw new InvalidOperationException($"Could not resolve owner member '{mp.ownerMemberName}' for port '{mp.name}' on node type '{this.GetType().FullName}'.");
+                    }
                 }
             }
+        #endregion
 
             // restore runtime state if present
             string stateStr = obj["state"]?.GetValue<string>();

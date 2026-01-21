@@ -97,6 +97,9 @@ namespace XyGraph
         private UIElement label;
         internal NodeContainer parentContainer;
         public MemberInfo ownerMember; // magic code that lets us set Inputs and Outputs on subclasses of Node
+        // optional owner metadata for multi-output grouping
+        public int ownerIndex = -1;
+        public string ownerMemberName = null;
 
         // Edit-time properties
         public List<Edge> edges = new List<Edge>();
@@ -214,6 +217,13 @@ namespace XyGraph
                 obj["color"] = "Black";
             }
 
+            // persist optional owner metadata for multi-output grouping
+            if (!string.IsNullOrEmpty(ownerMemberName) && ownerIndex >= 0)
+            {
+                obj["ownerMember"] = ownerMemberName;
+                obj["ownerIndex"] = ownerIndex;
+            }
+
             return obj;
         }
 
@@ -225,7 +235,7 @@ namespace XyGraph
             string name = obj["name"]?.GetValue<string>() ?? string.Empty;
             PortDirection pType = Enum.Parse<PortDirection>(obj["direction"]?.GetValue<string>() ?? PortDirection.Input.ToString());
 
-            // attempt to resolve the port's CLR type
+            // attempt to resolve the port's system.Type
             string typeName = obj["portType"]?.GetValue<string>() ?? string.Empty;
             Type resolvedType = null;
             if (!string.IsNullOrEmpty(typeName))
@@ -254,6 +264,10 @@ namespace XyGraph
             // restore GUID and connection type
             p.guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? p.guid.ToString());
             p.connectionType = Enum.Parse<ConnectionType>(obj["connectionType"]?.GetValue<string>() ?? p.connectionType.ToString());
+
+            // restore optional owner metadata
+            p.ownerMemberName = obj["ownerMember"]?.GetValue<string>();
+            p.ownerIndex = obj["ownerIndex"]?.GetValue<int?>() ?? -1;
 
             return p;
         }
