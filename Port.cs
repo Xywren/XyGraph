@@ -94,7 +94,7 @@ namespace XyGraph
         }
 
         // non-serialised elements
-        private UIElement label;
+        public UIElement label;
         internal NodeContainer parentContainer;
         public MemberInfo ownerMember; // magic code that lets us set Inputs and Outputs on subclasses of Node
         // optional owner metadata for multi-output grouping

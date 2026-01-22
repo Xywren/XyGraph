@@ -10,7 +10,7 @@ namespace XyGraph
     {
         public static readonly double OffsetX = 14;
         public static readonly double OffsetY = 14;
-        [NodeInput(Color = "Black", SocketSize = 20, DrawOuterRing = true, Name = "")]
+        [NodeInput(SocketSize = 20, DrawOuterRing = true, Name = "")]
         public Node END;
 
         public Port port { get; private set; }

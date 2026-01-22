@@ -190,7 +190,8 @@ namespace XyGraph
 
                 // Get port Data from the Attribute, if none provided, use default values
                 PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
-                string colorName = inAttr?.Color ?? outAttr?.Color ?? "Black";
+                // do not default to Black here; if attribute is absent we will derive a color from the member type
+                string colorName = inAttr?.Color ?? outAttr?.Color;
                 ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
                 int socketSize = inAttr != null ? inAttr.SocketSize : outAttr.SocketSize;
                 bool drawOuterRing = inAttr != null ? inAttr.DrawOuterRing : outAttr.DrawOuterRing;
@@ -205,7 +206,10 @@ namespace XyGraph
             // Loop over all the metadata in the list and create the Port UI elements and add them to the node
             foreach (var entry in items)
             {
-                Brush colorBrush = (Brush)brushConverter.ConvertFromString(entry.color);
+                // if the attribute did not provide a color, derive one from the member type
+                string derivedColor = Common.HashColour(entry.memberType?.ToString() ?? "object");
+                string finalColor = entry.color ?? derivedColor;
+                Brush colorBrush = (Brush)brushConverter.ConvertFromString(finalColor);
 
                 // Create the Port
                 Port p = new Port(entry.portName, entry.dir, entry.memberType, socketSize: entry.socketSize, color: colorBrush, drawSocketOuterRing: entry.drawOuterRing);
@@ -279,7 +283,10 @@ namespace XyGraph
                     }
 
                     // create the MultiPort UI from metadata
-                    MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: (Brush)brushConverter.ConvertFromString(multiAttr.Color), drawSocketOuterRing: multiAttr.DrawOuterRing);
+                    string derivedColor = Common.HashColour(elementType?.ToString() ?? "object");
+                    string finalColor = multiAttr.Color ?? derivedColor;
+                    Brush colorBrush = (Brush)brushConverter.ConvertFromString(finalColor);
+                    MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: colorBrush, drawSocketOuterRing: multiAttr.DrawOuterRing);
 
                     // keep track of which node, and which field in that node owns this list, and which element in this list this port belongs to
                     mp.ownerMember = member;
@@ -313,7 +320,10 @@ namespace XyGraph
                             }
 
                             // create a MultiPort for each existing list slot and insert after the add button
-                            MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: (Brush)brushConverter.ConvertFromString(multiAttr.Color), drawSocketOuterRing: multiAttr.DrawOuterRing);
+                            string derivedColorExisting = Common.HashColour(elementType?.ToString() ?? "object");
+                            string finalColorExisting = multiAttr.Color ?? derivedColorExisting;
+                            Brush existingColorBrush = (Brush)brushConverter.ConvertFromString(finalColorExisting);
+                            MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: existingColorBrush, drawSocketOuterRing: multiAttr.DrawOuterRing);
                             
                             // keep track of which node, and which member in that node owns this list, and which element in this list this port belongs to
                             mp.ownerMember = member;
@@ -398,12 +408,12 @@ namespace XyGraph
             if (double.IsNaN(x)) x = 0;
             if (double.IsNaN(y)) y = 0;
             // convert to centered world coordinates (world origin at center of graph)
-            double worldSize = graph?.WorldSize ?? 10000.0;
+            double worldSize = graph?.worldSize ?? 10000.0;
             double half = worldSize / 2.0;
             double centeredX = x - half;
             double centeredY = y - half;
 
-            var obj = new JsonObject
+            JsonObject obj = new JsonObject
             {
                 ["type"] = Type,
                 ["id"] = guid.ToString(),
@@ -590,13 +600,11 @@ namespace XyGraph
                             // load [NodeMultiOutput] attribute metadata
                             NodeMultiOutputAttribute multiAttr = fi.GetCustomAttribute<NodeMultiOutputAttribute>();
                             int socketSize = multiAttr?.SocketSize ?? 10;
-                            Brush colorBrush = Brushes.Black;
+                            // derive a color for multi-ports if not specified on the attribute
+                            string derived = Common.HashColour(elemTypeForPort?.ToString() ?? "object");
+                            BrushConverter localBrushConverter = new BrushConverter();
+                            Brush colorBrush = (Brush)localBrushConverter.ConvertFromString(multiAttr?.Color ?? derived);
                             bool drawOuter = multiAttr?.DrawOuterRing ?? true;
-                            if (multiAttr != null)
-                            {
-                                // try to use the color specified on the attribute, fall back to black
-                                try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(multiAttr.Color)); } catch { colorBrush = Brushes.Black; }
-                            }
 
                             // create a MultiPort
                             MultiPort newMp = new MultiPort(mp.name, PortDirection.Output, elemTypeForPort, socketSize: socketSize, color: colorBrush, drawSocketOuterRing: drawOuter);
@@ -666,12 +674,12 @@ namespace XyGraph
                             // load [NodeMultiOutput] attribute metadata
                             NodeMultiOutputAttribute multiAttr = pi.GetCustomAttribute<NodeMultiOutputAttribute>();
                             int socketSize = multiAttr?.SocketSize ?? 10;
-                            Brush colorBrush = Brushes.Black;
+                            // derive a color for multi-ports if not specified on the attribute (match field-backed behavior)
+                            string derivedProp = Common.HashColour(elemTypeForPort?.ToString() ?? "object");
+                            string finalPropColor = multiAttr?.Color ?? derivedProp;
+                            Brush colorBrush;
+                            try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(finalPropColor)); } catch { colorBrush = Brushes.Black; }
                             bool drawOuter = multiAttr?.DrawOuterRing ?? true;
-                            if (multiAttr != null)
-                            {
-                                try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(multiAttr.Color)); } catch { colorBrush = Brushes.Black; }
-                            }
 
                             // create a MultiPort
                             MultiPort newMp = new MultiPort(mp.name, PortDirection.Output, elemTypeForPort, socketSize: socketSize, color: colorBrush, drawSocketOuterRing: drawOuter);
@@ -740,7 +748,7 @@ namespace XyGraph
         // convert graph coordinates (0,0 at the center of the graph) to canvas coordinates (0,0 wt the top left of the graph)
         internal Point ConvertWorldSpace(Point p)
         {
-            double worldSize = graph?.WorldSize ?? 10000.0;
+            double worldSize = graph?.worldSize ?? 10000.0;
             return new Point(p.X + worldSize/2, p.Y + worldSize/2);
         }
 

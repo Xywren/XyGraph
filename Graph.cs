@@ -13,7 +13,7 @@ namespace XyGraph
     public class Graph : Canvas
     {
         public event Action? GraphChanged;
-        public double WorldSize { get; set; } = 10000.0;
+        public double worldSize = 10000.0;
         private enum GraphState { None, Panning, DraggingNode, CreatingEdge }
 
         public Point rightClickPos;
@@ -53,6 +53,7 @@ namespace XyGraph
             endItem = new MenuItem { Header = "Create End Node" };
             endItem.Click += (object sender, RoutedEventArgs e) => AddEndNode();
             ContextMenu.Items.Add(endItem);
+            
         }
 
 
@@ -70,6 +71,7 @@ namespace XyGraph
                 startItem.IsEnabled = false;
             }
         }
+
         private void AddEndNode()
         {
             if (endNode == null)
@@ -298,7 +300,7 @@ namespace XyGraph
 
             if (matched != null)
             {
-                var ctor = matched.GetConstructor(new System.Type[] { typeof(Graph) });
+                ConstructorInfo? ctor = matched.GetConstructor(new System.Type[] { typeof(Graph) });
                 if (ctor != null)
                 {
                     return (Node)ctor.Invoke(new object[] { this });
@@ -340,10 +342,10 @@ namespace XyGraph
             if (baseType == null)
                 throw new ArgumentNullException(nameof(baseType));
 
-            var result = new List<Type>();
+            List<Type> result = new List<Type>();
 
             // Look through all loaded assemblies
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly? assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type[] types;
 
@@ -356,7 +358,7 @@ namespace XyGraph
                     types = e.Types.Where(t => t != null).ToArray();
                 }
 
-                foreach (var t in types)
+                foreach (Type? t in types)
                 {
                     if (t == null)
                         continue;

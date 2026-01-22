@@ -8,7 +8,7 @@ namespace XyGraph
         // Optional override for the port display name. Null means use member name; empty string means show no label.
         public string Name { get; set; } = null;
         // Optional color name or hex for the port socket (defaults to Black)
-        public string Color { get; set; } = "Black";
+        public string Color { get; set; }
         // Connection type: default for inputs is Multi
         public ConnectionType ConnectionType { get; set; } = ConnectionType.Multi;
         // Optional socket size
@@ -23,7 +23,7 @@ namespace XyGraph
         // Optional override for the port display name. Null means use member name; empty string means show no label.
         public string Name { get; set; } = null;
         // Optional color name or hex for the port socket (defaults to Black)
-        public string Color { get; set; } = "Black";
+        public string Color { get; set; }
         // Connection type: default for outputs is Single
         public ConnectionType ConnectionType { get; set; } = ConnectionType.Single;
         // Optional socket size
@@ -38,7 +38,7 @@ namespace XyGraph
         // Optional override for the port display name. Null means use member name; empty string means show no label.
         public string Name { get; set; } = null;
         // Optional color name or hex for the port socket (defaults to Black)
-        public string Color { get; set; } = "Black";
+        public string Color { get; set; }
         // Connection type: default for multi-outputs is Multi
         public ConnectionType ConnectionType { get; set; } = ConnectionType.Multi;
         // Optional socket size

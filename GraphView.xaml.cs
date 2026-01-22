@@ -3,18 +3,36 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Documents;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Globalization;
 using System.Windows.Data;
+using System;
+using System.Reflection;
+using System.Collections.Generic;
+using System.Windows.Markup;
+using System.Windows.Controls.Primitives;
 
 namespace XyGraph
 {
     public partial class GraphView : UserControl
     {
+        // host-configurable preferred types to show in the type selector
+        public List<Type> availableInputTypes { get; set; } = new List<Type> { typeof(object) };
+
         private bool sidebarSlidOff = false;
         private System.Windows.Media.Animation.DoubleAnimation slideAnimation;
         private const double WORLD_SIZE = 10000;
         private const int VISUAL_TREE_SEARCH_DEPTH = 10;
+        private const string INPUT_PREVIEW_DRAG_FORMAT = "XyGraph.InputPreview";
+        private Point previewDragStart;
+        private bool previewMouseDown = false;
+        private InputPreview draggingPreview = null;
+        private AdornerLayer previewAdornerLayer = null;
+        private InputPreviewAdorner previewAdorner = null;
+        private RenderTargetBitmap previewAdornerBitmap = null;
+        private bool previewDragOverGraph = false;
         // Cached transforms for the inner graph to avoid repeated visual-tree searches
         private TransformGroup transformGroup;
         private ScaleTransform scaleTransform;
@@ -31,7 +49,7 @@ namespace XyGraph
             SizeChanged += GraphView_SizeChanged;
 
             // Set Graph to desired Size
-            graph.WorldSize = WORLD_SIZE;
+            graph.worldSize = WORLD_SIZE;
             graph.Width = WORLD_SIZE;
             graph.Height = WORLD_SIZE;
 
@@ -57,6 +75,223 @@ namespace XyGraph
 
             // sidebar toggle button
             ToggleSidebarButton.Click += ToggleSidebarButton_Click;
+            // add input button
+            AddInputButton.Click += AddInputButton_Click;
+            // enable drag-drop from input previews into the graph
+            graph.AllowDrop = true;
+            graph.DragOver += Graph_DragOver;
+            graph.DragLeave += Graph_DragLeave;
+            graph.Drop += Graph_Drop;
+
+            // log tunneling preview mouse down (captures handled events too)
+            this.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent,
+                new MouseButtonEventHandler((object s, MouseButtonEventArgs e) =>
+                {
+                    System.Diagnostics.Debug.WriteLine($"PreviewMouseLeftButtonDown: sender={s.GetType().Name}, orig={e.OriginalSource?.GetType().Name}, handled={e.Handled}, clickCount={e.ClickCount}");
+                }), handledEventsToo: true);
+
+            // log bubbling mouse down
+            this.AddHandler(UIElement.MouseLeftButtonDownEvent,
+                new MouseButtonEventHandler((object s, MouseButtonEventArgs e) =>
+                {
+                    System.Diagnostics.Debug.WriteLine($"MouseLeftButtonDown: sender={s.GetType().Name}, orig={e.OriginalSource?.GetType().Name}, handled={e.Handled}, clickCount={e.ClickCount}");
+                }), handledEventsToo: true);
+
+        }
+
+        private void AddInputButton_Click(object sender, RoutedEventArgs e)
+        {
+            InputPreview preview = CreateInputPreview("New Input", "");
+            InputsPanel.Children.Add(preview);
+            // focus the name textbox inside the preview
+            preview.NameBox.Focus();
+            preview.NameBox.SelectAll();
+        }
+
+        private InputPreview CreateInputPreview(string name, string typeName)
+        {
+            double cardWidth = SidebarContent.Width - 46.0;
+            InputPreview preview = new InputPreview();
+            preview.Width = cardWidth;
+            preview.AvailableInputTypes = availableInputTypes;
+            preview.NameBox.Text = name;
+            preview.TypeCombo.Text = typeName;
+            preview.TypeCombo.IsEditable = true;
+
+            // attach drag handlers so the preview can be dragged onto the graph
+            preview.PreviewMouseLeftButtonDown += (object s, System.Windows.Input.MouseButtonEventArgs e) =>
+            {
+                previewDragStart = e.GetPosition(this);
+                previewMouseDown = true;
+                draggingPreview = preview;
+            };
+
+            preview.PreviewMouseLeftButtonUp += (object s, System.Windows.Input.MouseButtonEventArgs e) =>
+            {
+                previewMouseDown = false;
+                draggingPreview = null;
+            };
+
+            preview.PreviewMouseMove += (object s, System.Windows.Input.MouseEventArgs e) =>
+            {
+                if (!previewMouseDown) return;
+                if (e.LeftButton != MouseButtonState.Pressed) return;
+                if (draggingPreview != preview) return;
+
+                Point current = e.GetPosition(this);
+                Vector delta = current - previewDragStart;
+                const double DRAG_THRESHOLD = 4.0;
+                if (System.Math.Abs(delta.X) > DRAG_THRESHOLD || System.Math.Abs(delta.Y) > DRAG_THRESHOLD)
+                {
+                    // render a bitmap snapshot of the preview for the adorner
+                    Size size = new Size(preview.ActualWidth, preview.ActualHeight);
+                    if (size.Width <= 0 || size.Height <= 0) size = new Size(200, 60);
+                    preview.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    preview.Arrange(new Rect(size));
+                    RenderTargetBitmap bmp = new RenderTargetBitmap((int)Math.Ceiling(size.Width), (int)Math.Ceiling(size.Height), 96, 96, PixelFormats.Pbgra32);
+                    bmp.Render(preview);
+
+                    // store adorner and layer so we can update/remove during drag
+                    previewAdornerBitmap = bmp;
+                    previewAdornerLayer = AdornerLayer.GetAdornerLayer(this.rootGrid);
+                    if (previewAdornerLayer != null)
+                    {
+                        previewAdorner = new InputPreviewAdorner(this.rootGrid, bmp);
+                        previewAdorner.SetOffset(new Point(-100,-100));
+                        previewAdornerLayer.Add(previewAdorner);
+                    }
+
+                    System.Windows.DataObject data = new System.Windows.DataObject(INPUT_PREVIEW_DRAG_FORMAT, preview);
+                    DragDrop.DoDragDrop(preview, data, DragDropEffects.Copy);
+                    // ensure adorner is removed after drag completes
+                    if (previewAdornerLayer != null && previewAdorner != null)
+                    {
+                        // only remove adorner if we didn't already remove it via DragLeave
+                        previewAdornerLayer.Remove(previewAdorner);
+                        previewAdorner = null;
+                        previewAdornerLayer = null;
+                        previewAdornerBitmap = null;
+                        previewDragOverGraph = false;
+                    }
+
+                    previewMouseDown = false;
+                    draggingPreview = null;
+                }
+            };
+            return preview;
+        }
+
+        private void Graph_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data != null && e.Data.GetDataPresent(INPUT_PREVIEW_DRAG_FORMAT))
+            {
+                e.Effects = DragDropEffects.Copy;
+                previewDragOverGraph = true;
+                if (previewAdorner != null)
+                {
+                    // position the adorner at the current mouse position relative to rootGrid
+                    Point p = e.GetPosition(this.rootGrid);
+                    previewAdorner.SetOffset(p);
+                }
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+                previewDragOverGraph = false;
+            }
+            e.Handled = true;
+        }
+
+        private void Graph_DragLeave(object sender, DragEventArgs e)
+        {
+            previewDragOverGraph = false;
+        }
+
+        private void Graph_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data == null || !e.Data.GetDataPresent(INPUT_PREVIEW_DRAG_FORMAT)) return;
+
+            InputPreview preview = e.Data.GetData(INPUT_PREVIEW_DRAG_FORMAT) as InputPreview;
+
+            // Only accept drops that actually entered the graph surface during the drag.
+            // This prevents immediate drops at the drag source creating unintended nodes.
+            if (!previewDragOverGraph)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            string inputName = "Input";
+            Type resolvedType = typeof(object);
+            if (preview != null)
+            {
+                inputName = preview.NameBox.Text ?? "Input";
+                object tag = preview.TypeCombo.Tag;
+                if (tag is Type t) resolvedType = t;
+                else
+                {
+                    string typeText = preview.TypeCombo.Text ?? string.Empty;
+                    Type maybe = ResolveTypeFromName(typeText);
+                    if (maybe != null) resolvedType = maybe;
+                }
+            }
+
+            // get drop point in canvas coordinates (graph is a Canvas)
+            Point canvasPoint = e.GetPosition(graph);
+            // Ignore drops that occur inside the sidebar area (likely the source) or outside graph bounds
+            // if drop is inside the SidebarContainer, treat as no-op
+            Point pSidebar = e.GetPosition(SidebarContainer);
+            if (pSidebar.X >= 0 && pSidebar.X <= SidebarContainer.ActualWidth && pSidebar.Y >= 0 && pSidebar.Y <= SidebarContainer.ActualHeight)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // ensure the drop point is within the graph visible area
+            if (double.IsNaN(canvasPoint.X) || double.IsNaN(canvasPoint.Y) || canvasPoint.X < 0 || canvasPoint.Y < 0 || canvasPoint.X > graph.ActualWidth || canvasPoint.Y > graph.ActualHeight)
+            {
+                e.Handled = true;
+                return;
+            }
+            InputNode inNode = new InputNode(graph, Guid.NewGuid(), inputName, resolvedType);
+            AddNode(inNode, canvasPoint.X - inNode.SpawnOffsetX, canvasPoint.Y - inNode.SpawnOffsetY);
+
+            e.Handled = true;
+        }
+
+        
+
+        private Type ResolveTypeFromName(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return null;
+
+            // check preferred list first
+            foreach (Type t in availableInputTypes)
+            {
+                if (string.Equals(t.Name, input, StringComparison.OrdinalIgnoreCase) || string.Equals(t.FullName, input, StringComparison.OrdinalIgnoreCase))
+                    return t;
+            }
+
+            // try Type.GetType (supports assembly-qualified names)
+            try
+            {
+                Type byName = Type.GetType(input, false, true);
+                if (byName != null) return byName;
+            }
+            catch { }
+
+            // search loaded assemblies for simple name match
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+                try { types = asm.GetTypes(); } catch { continue; }
+                foreach (Type t in types)
+                {
+                    if (string.Equals(t.Name, input, StringComparison.OrdinalIgnoreCase)) return t;
+                }
+            }
+
+            return null;
         }
 
         private void GraphView_SizeChanged(object sender, SizeChangedEventArgs e)
