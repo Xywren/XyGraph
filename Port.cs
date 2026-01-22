@@ -194,7 +194,7 @@ namespace XyGraph
         // Serialize this port to JSON for saving in a node/graph.
         public JsonObject Save()
         {
-            var obj = new JsonObject
+            JsonObject obj = new JsonObject
             {
                 ["id"] = guid.ToString(),
                 ["name"] = name ?? string.Empty,
@@ -250,7 +250,7 @@ namespace XyGraph
             string colorStr = obj["color"]?.GetValue<string>() ?? "Black";
             try
             {
-                var conv = new BrushConverter();
+                BrushConverter conv = new BrushConverter();
                 colorBrush = (Brush)conv.ConvertFromString(colorStr);
             }
             catch

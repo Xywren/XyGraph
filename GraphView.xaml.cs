@@ -102,7 +102,7 @@ namespace XyGraph
         private void AddInputButton_Click(object sender, RoutedEventArgs e)
         {
             InputPreview preview = CreateInputPreview("New Input", "");
-            InputsPanel.Children.Add(preview);
+            InputsList.Items.Add(preview);
             // focus the name textbox inside the preview
             preview.NameBox.Focus();
             preview.NameBox.SelectAll();

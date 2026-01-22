@@ -50,6 +50,15 @@ namespace XyGraph
             Point start = fromPort.socket.TranslatePoint(new Point(fromPort.socket.ActualWidth / 2, fromPort.socket.ActualHeight / 2), graph);
             Point end = toPort.socket.TranslatePoint(new Point(toPort.socket.ActualWidth / 2, toPort.socket.ActualHeight / 2), graph);
 
+            // determine stroke colour: prefer the input-port's colour when available
+            Brush strokeBrush = null;
+            if (toPort != null && toPort.direction == PortDirection.Input)
+                strokeBrush = toPort.colour;
+            else if (fromPort != null && fromPort.direction == PortDirection.Input)
+                strokeBrush = fromPort.colour;
+            else
+                strokeBrush = fromPort?.colour ?? Brushes.Black;
+
             if (style == EdgeStyle.Linear)
             {
                 if (visual is Line line)
@@ -61,7 +70,7 @@ namespace XyGraph
                 }
                 else
                 {
-                    visual = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false, X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y };
+                    visual = new Line { Stroke = strokeBrush, StrokeThickness = 2, IsHitTestVisible = false, X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y };
                 }
             }
             else // Bezier
@@ -83,10 +92,11 @@ namespace XyGraph
                 if (visual is Path path)
                 {
                     path.Data = geometry;
+                    path.Stroke = strokeBrush;
                 }
                 else
                 {
-                    visual = new Path { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false, Data = geometry };
+                    visual = new Path { Stroke = strokeBrush, StrokeThickness = 2, IsHitTestVisible = false, Data = geometry };
                 }
             }
         }
@@ -278,7 +288,7 @@ namespace XyGraph
 
         public JsonObject Save()
         {
-            var obj = new JsonObject
+            JsonObject obj = new JsonObject
             {
                 ["id"] = guid.ToString(),
                 ["from"] = fromPort?.guid.ToString() ?? string.Empty,
