@@ -11,6 +11,9 @@ namespace XyGraph
 {
     public partial class InputPreview : UserControl
     {
+        public Guid InputId { get; private set; } = Guid.NewGuid();
+        public event Action<InputPreview> GraphInputChanged;
+
         public List<Type> AvailableInputTypes { get; set; } = new List<Type> { typeof(object) };
 
         public InputPreview()
@@ -19,8 +22,8 @@ namespace XyGraph
             Loaded += InputPreview_Loaded;
 
             // wire up default behaviors
-            NameBox.KeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Enter) CommitPreview(NameBox); };
-            NameBox.LostFocus += (s, e) => CommitPreview(NameBox);
+            // update live on changes to name or type
+            NameBox.TextChanged += (s, e) => { GraphInputChanged?.Invoke(this); };
 
             TypeCombo.SelectionChanged += (s, e) =>
             {
@@ -45,6 +48,8 @@ namespace XyGraph
                     SocketInner.Background = brush;
                     SocketOuter.BorderBrush = brush;
                 }
+                // notify listeners on each change
+                GraphInputChanged?.Invoke(this);
             };
 
         }
@@ -70,26 +75,12 @@ namespace XyGraph
                 SocketInner.Background = brush2;
                 SocketOuter.BorderBrush = brush2;
             }
+            // notify listeners of initial state
+            GraphInputChanged?.Invoke(this);
         }
 
 
-        private void CommitPreview(TextBox tb)
-        {
-            if (tb == null) return;
-            tb.IsReadOnly = true;
-            tb.Background = Brushes.Transparent;
-        }
-
-        private void CommitPreview(ComboBox combo)
-        {
-            if (combo == null) return;
-            string text = (combo.Text ?? string.Empty).Trim();
-            Type resolved = ResolveTypeFromName(text) ?? typeof(object);
-            combo.Tag = resolved;
-            combo.Text = resolved.Name;
-            combo.IsEditable = false;
-            combo.ToolTip = resolved.FullName;
-        }
+        // CommitPreview methods removed: updates fire live via events instead of manual commit
 
         private Type ResolveTypeFromName(string input)
         {

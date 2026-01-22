@@ -117,6 +117,8 @@ namespace XyGraph
             preview.NameBox.Text = name;
             preview.TypeCombo.Text = typeName;
             preview.TypeCombo.IsEditable = true;
+            // subscribe to changes on the preview so we can update existing InputNodes
+            preview.GraphInputChanged += (InputPreview p) => OnGraphInputChanged(p);
 
             // attach drag handlers so the preview can be dragged onto the graph
             preview.PreviewMouseLeftButtonDown += (object s, System.Windows.Input.MouseButtonEventArgs e) =>
@@ -253,8 +255,13 @@ namespace XyGraph
                 e.Handled = true;
                 return;
             }
-            InputNode inNode = new InputNode(graph, Guid.NewGuid(), inputName, resolvedType);
+            // Use the preview's InputId so nodes can be linked to the master preview
+            Guid id = Guid.NewGuid();
+            if (preview != null) id = preview.InputId;
+            InputNode inNode = new InputNode(graph, id, inputName, resolvedType);
             AddNode(inNode, canvasPoint.X - inNode.SpawnOffsetX, canvasPoint.Y - inNode.SpawnOffsetY);
+
+            // Also add node to list UI? The previews are shown in InputsList; keep them independent.
 
             e.Handled = true;
         }
@@ -297,7 +304,36 @@ namespace XyGraph
         private void GraphView_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             UpdateSidebarLayout();
+            // ensure existing InputsList items (if any) are wired to update handlers
+            foreach (object item in InputsList.Items)
+            {
+                if (item is InputPreview p)
+                {
+                    p.GraphInputChanged -= OnGraphInputChanged;
+                    p.GraphInputChanged += OnGraphInputChanged;
+                }
+            }
         }
+
+        private void OnGraphInputChanged(InputPreview preview)
+        {
+            if (preview == null) return;
+            Guid id = preview.InputId;
+            string name = preview.NameBox.Text ?? string.Empty;
+            Type resolved = null;
+            if (preview.TypeCombo.Tag is Type t) resolved = t;
+            else resolved = ResolveTypeFromName(preview.TypeCombo.Text ?? string.Empty) ?? typeof(object);
+
+            // find all InputNode instances with this id and update them
+            foreach (Node n in graph.nodes)
+            {
+                if (n is InputNode inNode && inNode.inputId == id)
+                {
+                    inNode.HandleGraphInputChange(name, resolved);
+                }
+            }
+        }
+
 
         private void UpdateSidebarLayout()
         {

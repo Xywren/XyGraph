@@ -95,6 +95,7 @@ namespace XyGraph
 
         // non-serialised elements
         public UIElement label;
+        public TextBlock typeLabel;
         internal NodeContainer parentContainer;
         public MemberInfo ownerMember; // magic code that lets us set Inputs and Outputs on subclasses of Node
         // optional owner metadata for multi-output grouping
@@ -128,7 +129,7 @@ namespace XyGraph
 
             // create a small type label to display underneath the socket (e.g. "<Node>")
             string typeName = (portType != null) ? portType.Name : "object";
-            TextBlock typeLabel = new TextBlock { Text = $"<{typeName}>", FontSize = 6, Foreground = Brushes.LightGray, Margin = new Thickness(0, -2, 0, 0) };
+            typeLabel = new TextBlock { Text = $"<{typeName}>", FontSize = 6, Foreground = Brushes.LightGray, Margin = new Thickness(0, -2, 0, 0) };
             // align type label: left for input ports, right for output ports
             if (direction == PortDirection.Input)
             {

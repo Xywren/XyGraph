@@ -47,6 +47,43 @@ namespace XyGraph
             outputPort = p;
         }
 
+        // Update this InputNode from a master definition (name and type)
+        public void HandleGraphInputChange(string name, Type portType)
+        {
+            // update title via the public property so the UI is refreshed
+            this.title = name ?? string.Empty;
+
+            // update port
+            if (outputPort != null)
+            {
+                outputPort.name = name ?? string.Empty;
+                outputPort.portType = portType ?? typeof(object);
+                // update label visual
+                try { if (outputPort.label is TextBlock tb) { tb.Text = name ?? string.Empty; } } catch { }
+                
+                if (outputPort.typeLabel != null)
+                {
+                    string typeName = (outputPort.portType != null) ? outputPort.portType.Name : "object";
+                    outputPort.typeLabel.Text = $"<{typeName}>";
+                    // align type label consistent with port direction
+                    outputPort.typeLabel.HorizontalAlignment = outputPort.direction == PortDirection.Input ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                    outputPort.typeLabel.TextAlignment = outputPort.direction == PortDirection.Input ? TextAlignment.Left : TextAlignment.Right;
+                }
+
+                // update socket colour
+                string hex = Common.HashColour((outputPort.portType ?? typeof(object)).ToString());
+                BrushConverter conv = new BrushConverter();
+                Brush colorBrush = (Brush)conv.ConvertFromString(hex);
+                outputPort.colour = colorBrush;
+
+                // redraw edges connected to this port
+                foreach (Edge e in outputPort.edges)
+                {
+                    e.ReDraw();
+                }
+            }
+        }
+
         public override JsonObject Save()
         {
             JsonObject obj = base.Save();
