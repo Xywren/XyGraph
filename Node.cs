@@ -224,6 +224,16 @@ namespace XyGraph
             }
         }
 
+        public void ClearRuntimeCache()
+        {
+            foreach (Port p in ports)
+            {
+                p.runtimeValue = null;
+                p.hasRuntimeValue = false;
+                p.isEvaluating = false;
+            }
+        }
+
         private void HandleNodeMultiPortAttributes(Type t, BindingFlags flags)
         {
             // used to convert string hex codes ("#FF00FF") into Brushes
@@ -369,7 +379,7 @@ namespace XyGraph
 
         public void Delete()
         {
-            List<Edge> edgesToRemove = graph.edges.Where(edge => this.ports.Contains(edge.fromPort) || this.ports.Contains(edge.toPort)).ToList();
+            List<Edge> edgesToRemove = graph.edges.Where(edge => this.ports.Contains(edge.outputPort) || this.ports.Contains(edge.inputPort)).ToList();
             foreach (Edge edge in edgesToRemove)
             {
                 edge.Delete();
@@ -776,6 +786,148 @@ namespace XyGraph
         //                            Runtime behaviour
         // =======================================================================
 
+
+        // Loop through all this Node's [NodeInput]s and get's their values
+        public void PopulateInputs()
+        {
+            if (graph == null) return;
+
+            // Get Member Data
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+            List<MemberInfo> members = new List<MemberInfo>();
+            Type nodeType = this.GetType();
+            foreach (FieldInfo f in nodeType.GetFields(flags)) members.Add(f);
+            foreach (PropertyInfo p in nodeType.GetProperties(flags)) members.Add(p);
+
+            // loop through all members of this node
+            foreach (MemberInfo member in members)
+            {
+                // if this member doesnt have the [NodeInput] attribute, skip it
+                NodeInputAttribute inAttr = member.GetCustomAttribute<NodeInputAttribute>();
+                if (inAttr == null) continue;
+
+                // find input port for this member
+                Port inputPort = this.ports.FirstOrDefault(p => p.ownerMember != null && p.ownerMember == member && p.direction == PortDirection.Input);
+                if (inputPort == null) continue;
+
+                // look for an incoming edge on this port
+                Edge incoming = inputPort.edges.FirstOrDefault(e => e.inputPort == inputPort && e.outputPort != null);
+                if (incoming != null && incoming.outputPort != null)
+                {
+                    // Get the PortValue from the upstream node, assign it to this member
+                    object val = this.ResolvePortValue(incoming.outputPort);
+                    try
+                    {
+                        if (member is FieldInfo field) field.SetValue(this, val);
+                        else if (member is PropertyInfo prop) prop.SetValue(this, val);
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        // Resolve the value produced by an output Port. Lazily evaluates upstream data nodes.
+        internal object ResolvePortValue(Port targetPort)
+        {
+            // if port is null, skip it
+            if (targetPort == null) return null;
+
+            // if port already has a runtime value cached, return it
+            if (targetPort.hasRuntimeValue) return targetPort.runtimeValue;
+
+            //if port does not already have a cached value, we need to evaluate upstream node
+
+            // if the target port is somehow an input port (this should never happen)
+            // get the output port on the other end of the edge
+            Port fromPort = null;
+            if (targetPort.direction == PortDirection.Input)
+            {
+                Edge incoming = targetPort.edges.FirstOrDefault(e => e.inputPort == targetPort && e.outputPort != null);
+                if (incoming == null)
+                {
+                    targetPort.runtimeValue = null;
+                    targetPort.hasRuntimeValue = true;
+                    return null;
+                }
+                fromPort = incoming.outputPort;
+            }
+            else
+                fromPort = targetPort;
+
+            // these should never really happen, but just in case
+            if (fromPort == null) return null;
+            if (fromPort.hasRuntimeValue) return fromPort.runtimeValue;
+            if (fromPort.isEvaluating) throw new InvalidOperationException("Cycle detected during evaluation.");
+
+            // if we reached this point, the port does not have a cached value and we need to evaluate its parent node
+
+            // get the parent Node of this port
+            Node parentNode = fromPort.parentContainer?.node;
+            if (parentNode == null) return null;
+
+            try
+            {
+                fromPort.isEvaluating = true;
+
+                // just incase the parent node has uncached inputs also (chained data nodes)
+                // populate the inputs of the parent also
+                parentNode.PopulateInputs();
+
+                // evaluate the parent node
+                parentNode.Evaluate();
+
+                // cache these outputs into the ports
+                parentNode.PublishOutputs();
+
+                object result = fromPort.runtimeValue;
+                fromPort.hasRuntimeValue = true;
+                return result;
+            }
+            finally
+            {
+                fromPort.isEvaluating = false;
+            }
+        }
+
+        // After Evaluate, write outputs into port values
+        public void PublishOutputs()
+        {
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+
+            // Mget Member Data
+            List<MemberInfo> members = new List<MemberInfo>();
+            Type nodeType = this.GetType();
+            foreach (FieldInfo f in nodeType.GetFields(flags)) members.Add(f);
+            foreach (PropertyInfo p in nodeType.GetProperties(flags)) members.Add(p);
+
+            // loop through all members of this node
+            foreach (MemberInfo member in members)
+            {
+                // if this member doesnt have the [NodeOutput] attribute, skip it
+                NodeOutputAttribute outAttr = member.GetCustomAttribute<NodeOutputAttribute>();
+                if (outAttr == null) continue;
+
+                // find output port for this member
+                Port outPort = this.ports.FirstOrDefault(p => p.ownerMember != null && p.ownerMember == member && p.direction == PortDirection.Output);
+                if (outPort == null) continue;
+
+                // get the value of this member
+                object val = null;
+                try
+                {
+                    if (member is FieldInfo field) val = field.GetValue(this);
+                    else if (member is PropertyInfo prop) val = prop.GetValue(this);
+                }
+                catch { val = null; }
+
+                // set the ports value to this members value
+                outPort.runtimeValue = val;
+                outPort.hasRuntimeValue = true;
+            }
+        }
+
+
+
         public enum NodeState
         {
             Idle,
@@ -796,8 +948,13 @@ namespace XyGraph
             }
         }
 
+        
+        public virtual void Evaluate() { } // Nodes that never actually Run() but need to compute a value should override this and do input>output processing here 
+
         public virtual void Run()
         {
+            // ensure inputs are populated for this node before running
+            PopulateInputs();
             state = NodeState.Running;
         }
         public virtual void Completed()

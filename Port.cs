@@ -97,13 +97,21 @@ namespace XyGraph
         public UIElement label;
         public TextBlock typeLabel;
         internal NodeContainer parentContainer;
+
         public MemberInfo ownerMember; // magic code that lets us set Inputs and Outputs on subclasses of Node
-        // optional owner metadata for multi-output grouping
-        public int ownerIndex = -1;
+        public int ownerIndex = -1; // optional owner metadata for multi-output grouping
         public string ownerMemberName = null;
 
         // Edit-time properties
         public List<Edge> edges = new List<Edge>();
+
+        // Transient runtime state (cleared at start of a graph run)
+        // Stores the computed value for this output port during a run.
+        public object runtimeValue;
+        // Whether runtimeValue contains a valid computed value.
+        public bool hasRuntimeValue = false;
+        // Used for cycle detection while evaluating this port/node.
+        internal bool isEvaluating = false;
 
 
         public Port(string name, PortDirection direction, Type type, int socketSize = DEFAULT_SOCKET_SIZE, Brush color = null, bool drawSocketOuterRing = true)
@@ -124,6 +132,13 @@ namespace XyGraph
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+            // Align the grid to the side of the node depending on port direction so ports sit flush
+            // against the left (inputs) or right (outputs) edges.
+            if (direction == PortDirection.Input)
+                grid.HorizontalAlignment = HorizontalAlignment.Left;
+            else
+                grid.HorizontalAlignment = HorizontalAlignment.Right;
+
             TextBlock textBlock = new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
             label = textBlock;
 
@@ -143,7 +158,8 @@ namespace XyGraph
             }
 
             // create vertical stack which contains a horizontal row (socket + label) and the small type label underneath
-            StackPanel verticalStack = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center };
+            // align the stack to the left for inputs and right for outputs so sockets align on the node edges
+            StackPanel verticalStack = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = (direction == PortDirection.Input) ? HorizontalAlignment.Left : HorizontalAlignment.Right };
 
             if (direction == PortDirection.Input)
             {

@@ -22,8 +22,12 @@ namespace XyGraph
 
             // Derive H, S, L from hash bytes
             int hue = ((hashBytes[0] << 8) | hashBytes[1]) % 360; // 0-359
-            double saturation = 0.5 + (hashBytes[2] / 255.0) * 0.4; // 0.5 - 0.9
+            // Force full saturation (100%) to avoid dull/ugly colours
+            double saturation = 1.0;
+            // Derive lightness but clamp to 30%-60%
             double lightness = 0.4 + (hashBytes[3] / 255.0) * 0.3; // 0.4 - 0.7
+            if (lightness < 0.3) lightness = 0.3;
+            else if (lightness > 0.6) lightness = 0.6;
 
             Color c = HslToRgb(hue, saturation, lightness);
             // Return as #RRGGBB
@@ -32,6 +36,11 @@ namespace XyGraph
         // Convert HSL (h in degrees 0-360, s,l in 0..1) to Color
         private static Color HslToRgb(double h, double s, double l)
         {
+            // Ensure saturation is full and lightness is clamped for consistency
+            s = 1.0;
+            if (l < 0.3) l = 0.3;
+            else if (l > 0.6) l = 0.6;
+
             double c = (1.0 - Math.Abs(2.0 * l - 1.0)) * s;
             double hh = h / 60.0;
             double x = c * (1.0 - Math.Abs(hh % 2.0 - 1.0));

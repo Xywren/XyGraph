@@ -122,7 +122,7 @@ namespace XyGraph
         public Edge CreateEdge(Port from, Port to)
         {
             // Check if an edge already exists between these ports (bi-directional)
-            if (edges.Any(edge => (edge.fromPort == from && edge.toPort == to) || (edge.fromPort == to && edge.toPort == from)))
+            if (edges.Any(edge => (edge.outputPort == from && edge.inputPort == to) || (edge.outputPort == to && edge.inputPort == from)))
             {
                 return null;
             }
@@ -399,9 +399,19 @@ namespace XyGraph
         public void Run()
         {
             if (startNode == null) return;
+            // clear transient runtime state on ports so each run starts fresh
+            ClearRuntimeCache();
             activeNode = startNode;
             status = GraphStatus.Running;
             startNode.Run();
+        }
+
+        private void ClearRuntimeCache()
+        {
+            foreach (Node node in nodes)
+            {
+                try { node.ClearRuntimeCache(); } catch { }
+            }
         }
     }
 }
