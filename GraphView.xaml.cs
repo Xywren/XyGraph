@@ -204,10 +204,9 @@ namespace XyGraph
             preview.NameBox.Text = name;
             preview.TypeCombo.Text = typeName;
             preview.TypeCombo.IsEditable = true;
+
             // subscribe to changes on the preview so we can update existing InputNodes
             preview.GraphInputChanged += (GraphInput p) => OnGraphInputChanged(p);
-
-            // drag handled centrally on InputsList so no per-control handlers required
             return preview;
         }
 

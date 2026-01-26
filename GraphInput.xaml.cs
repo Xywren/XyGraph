@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 
 namespace XyGraph
 {
@@ -65,6 +66,19 @@ namespace XyGraph
             };
             cm.Items.Add(deleteItem);
             this.ContextMenu = cm;
+
+            // ensure right-clicks on any child control show this control's context menu
+            this.AddHandler(UIElement.PreviewMouseRightButtonDownEvent,
+                new MouseButtonEventHandler((object s, MouseButtonEventArgs e) =>
+                {
+                    if (this.ContextMenu != null)
+                    {
+                        this.ContextMenu.PlacementTarget = this;
+                        this.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                        this.ContextMenu.IsOpen = true;
+                        e.Handled = true;
+                    }
+                }), handledEventsToo: true);
 
         }
 
