@@ -192,7 +192,27 @@ namespace XyGraph
                 PortDirection dir = inAttr != null ? PortDirection.Input : PortDirection.Output;
                 // do not default to Black here; if attribute is absent we will derive a color from the member type
                 string colorName = inAttr?.Color ?? outAttr?.Color;
-                ConnectionType connType = inAttr != null ? inAttr.ConnectionType : outAttr.ConnectionType;
+                // Determine connection type. If the attribute explicitly set ConnectionType, use it.
+                // Otherwise, default outputs that are of type Node (or derived) to Single, else Multi.
+                ConnectionType connType;
+                if (inAttr != null)
+                {
+                    connType = inAttr.ConnectionType;
+                }
+                else
+                {
+                    // outAttr.ConnectionType is nullable to indicate unspecified. If specified, use it.
+                    if (outAttr.ConnectionType.HasValue)
+                    {
+                        connType = outAttr.ConnectionType.Value;
+                    }
+                    else
+                    {
+                        // if member type is Node or derived, default to Single, else Multi
+                        if (typeof(Node).IsAssignableFrom(memberType)) connType = ConnectionType.Single;
+                        else connType = ConnectionType.Multi;
+                    }
+                }
                 int socketSize = inAttr != null ? inAttr.SocketSize : outAttr.SocketSize;
                 bool drawOuterRing = inAttr != null ? inAttr.DrawOuterRing : outAttr.DrawOuterRing;
 

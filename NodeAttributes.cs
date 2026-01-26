@@ -25,7 +25,7 @@ namespace XyGraph
         // Optional color name or hex for the port socket (defaults to Black)
         public string Color { get; set; }
         // Connection type: default for outputs is Single
-        public ConnectionType ConnectionType { get; set; } = ConnectionType.Single;
+        public ConnectionType? ConnectionType { get; set; } = null;
         // Optional socket size
         public int SocketSize { get; set; } = 10;
         // whether to draw outer ring around socket
