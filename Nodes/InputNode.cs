@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json.Nodes;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -11,9 +12,27 @@ namespace XyGraph
     {
         public Guid inputId;
         public Port outputPort;
-
         public InputNode(Graph graph, Guid inputId, string name, Type portType) : base(graph)
         {
+            Initialize(inputId, name, portType);
+        }
+
+        // Minimal constructor used by the Graph loader so it can create the concrete type
+        public InputNode(Graph graph) : base(graph)
+        {
+            // Configure visuals similar to the full constructor but do not create the output port here.
+            titleContainer.Visibility = Visibility.Collapsed;
+            mainContainer.Background = Brushes.Transparent;
+            inputContainer.Visibility = Visibility.Collapsed;
+            topContainer.Visibility = Visibility.Collapsed;
+
+            // make the output container have rounded corners for this input node
+            outputContainer.CornerRadius = new CornerRadius(6);
+        }
+
+        // Initialize performs the original constructor work so callers can create fully-initialized InputNodes
+        public void Initialize(Guid inputId, string name, Type portType)
+            {
             this.inputId = inputId;
 
             // Visuals
@@ -90,6 +109,78 @@ namespace XyGraph
             obj["inputId"] = inputId.ToString();
             obj["inputType"] = outputPort?.portType?.AssemblyQualifiedName ?? string.Empty;
             return obj;
+        }
+
+        public override void Load(JsonObject obj)
+        {
+            if (obj == null) throw new ArgumentNullException(nameof(obj));
+
+            // Remove any output ports that may have been created by the constructor to avoid duplication
+            try
+            {
+                foreach (Port existing in ports.ToList())
+                {
+                    if (existing.direction == PortDirection.Output)
+                    {
+                        existing.Delete();
+                    }
+                }
+            }
+            catch { }
+
+            // Let base.Load reconstruct ports and basic state
+            base.Load(obj);
+
+            // restore inputId
+            string idStr = obj["inputId"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(idStr) && Guid.TryParse(idStr, out Guid parsed))
+            {
+                inputId = parsed;
+            }
+
+            // resolve saved type
+            string typeName = obj["inputType"]?.GetValue<string>() ?? string.Empty;
+            Type resolvedType = typeof(object);
+            if (!string.IsNullOrEmpty(typeName))
+            {
+                try { resolvedType = System.Type.GetType(typeName) ?? typeof(object); } catch { resolvedType = typeof(object); }
+            }
+
+            // collect output ports created by base.Load
+            List<Port> outputPorts = ports.Where(p => p.direction == PortDirection.Output).ToList();
+
+            if (outputPorts.Count > 0)
+            {
+                // keep the first output port, remove any extras
+                outputPort = outputPorts[0];
+                for (int i = 1; i < outputPorts.Count; i++)
+                {
+                    try { outputPorts[i].Delete(); } catch { }
+                }
+
+                // ensure label visual matches InputNode style
+                try
+                {
+                    if (outputPort.label is TextBlock tb)
+                    {
+                        tb.Text = outputPort.name ?? (obj["type"]?.GetValue<string>() ?? "Input");
+                        tb.FontWeight = FontWeights.Bold;
+                        tb.Foreground = Brushes.White;
+                    }
+                    if (outputPort.typeLabel != null)
+                    {
+                        string typeLabelName = (outputPort.portType != null) ? outputPort.portType.Name : "object";
+                        outputPort.typeLabel.Text = $"<{typeLabelName}>";
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                // no output port reconstructed; create one using saved metadata
+                string nameForPort = obj["type"]?.GetValue<string>() ?? "Input";
+                Initialize(inputId, nameForPort, resolvedType);
+            }
         }
     }
 }

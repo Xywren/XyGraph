@@ -782,14 +782,18 @@ namespace XyGraph
             return new Point(p.X + worldSize/2, p.Y + worldSize/2);
         }
 
-        public List<String> GetOutputStrings()
+        public List<String> GetOutputStrings(Type filterType)
         {
             List<string> outputNames = new List<string>();
             foreach (Port port in ports)
             {
                 if (port.direction == PortDirection.Output)
                 {
-                    outputNames.Add(port.name);
+                    // if no filter provided, include all. Otherwise include only ports whose portType is assignable to the filter
+                    if (filterType == null || (port.portType != null && filterType.IsAssignableFrom(port.portType)))
+                    {
+                        outputNames.Add(port.name);
+                    }
                 }
             }
             return outputNames;

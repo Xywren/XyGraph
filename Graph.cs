@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -12,13 +13,17 @@ namespace XyGraph
 
     public class Graph : Canvas
     {
+        public event Action GraphLoaded;
         public event Action? GraphChanged;
+
         public double worldSize = 10000.0;
         private enum GraphState { None, Panning, DraggingNode, CreatingEdge }
 
         public Point rightClickPos;
         public List<Edge> edges { get; internal set; } = new List<Edge>();
         public List<Node> nodes { get; internal set; } = new List<Node>();
+        // graph-level input previews (also act as serialisable data containers)
+        public List<GraphInput> inputs { get; internal set; } = new List<GraphInput>();
 
         private const int GRID_SIZE = 20;
 
@@ -74,7 +79,7 @@ namespace XyGraph
                 nodes.Add(startNode);
                 startNode.NodeChanged -= OnNodeChanged;
                 startNode.NodeChanged += OnNodeChanged;
-                try { if (startItem != null) startItem.IsEnabled = false; } catch { }
+                if (startItem != null) startItem.IsEnabled = false;
             }
         }
 
@@ -89,7 +94,7 @@ namespace XyGraph
                 nodes.Add(endNode);
                 endNode.NodeChanged -= OnNodeChanged;
                 endNode.NodeChanged += OnNodeChanged;
-                try { if (endItem != null) endItem.IsEnabled = false; } catch { }
+                if (endItem != null) endItem.IsEnabled = false;
             }
         }
         public void AddNode(Node n, double posX = 0, double posY = 0)
@@ -168,6 +173,10 @@ namespace XyGraph
             while(nodes.Count >0)
                 nodes[0].Delete();
 
+
+            while (inputs.Count > 0)
+                inputs[0].Delete();
+
             if (startItem != null)
                 startItem.IsEnabled = true;
             if (endItem != null)
@@ -198,6 +207,14 @@ namespace XyGraph
             }
 
             obj["nodes"] = nodesArray;
+
+            // persist graph-level inputs
+            JsonArray inputsArray = new JsonArray();
+            foreach (GraphInput gi in inputs)
+            {
+                inputsArray.Add(gi.Save());
+            }
+            obj["inputs"] = inputsArray;
 
             JsonArray edgesArray = new JsonArray();
             foreach (Edge e in edges)
@@ -258,6 +275,20 @@ namespace XyGraph
                 }
             }
 
+            // load graph-level inputs (if present)
+            JsonArray inputsArray = obj["inputs"] as JsonArray;
+            if (inputsArray != null)
+            {
+                foreach (JsonNode? item in inputsArray)
+                {
+                    JsonObject inputObj = item as JsonObject;
+                    if (inputObj == null) throw new ArgumentException("Invalid input object in inputs array");
+                        GraphInput gi = new GraphInput(this);
+                        gi.Load(inputObj);
+                        inputs.Add(gi);
+                }
+            }
+
             // restore runtime status (if present)
             string statusStr = obj["status"]?.GetValue<string>();
             if (!string.IsNullOrEmpty(statusStr))
@@ -288,8 +319,12 @@ namespace XyGraph
             endNode = nodes.FirstOrDefault(n => n is EndNode) as EndNode;
             if (endNode != null) endItem.IsEnabled = false;
 
+            // notify listeners that the graph has finished loading
+            GraphLoaded?.Invoke();
+
             return this;
         }
+
 
         // will return an instance of the type, casted to a Node
         private Node CreateNodeByType(string typeName)

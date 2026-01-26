@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -9,15 +10,19 @@ using System.Windows.Media;
 
 namespace XyGraph
 {
-    public partial class InputPreview : UserControl
+    public partial class GraphInput : UserControl
     {
+        private Graph graph;
         public Guid InputId { get; private set; } = Guid.NewGuid();
-        public event Action<InputPreview> GraphInputChanged;
+        public event Action<GraphInput> GraphInputChanged;
 
         public List<Type> AvailableInputTypes { get; set; } = new List<Type> { typeof(object) };
 
-        public InputPreview()
+        // now requires the owning Graph so deletion can operate without external parameter
+        public GraphInput(Graph graph)
         {
+            if (graph == null) throw new ArgumentNullException(nameof(graph));
+            this.graph = graph;
             InitializeComponent();
             Loaded += InputPreview_Loaded;
 
@@ -52,6 +57,15 @@ namespace XyGraph
                 GraphInputChanged?.Invoke(this);
             };
 
+            ContextMenu cm = new ContextMenu();
+            MenuItem deleteItem = new MenuItem { Header = "Delete Input" };
+            deleteItem.Click += (s, e) =>
+            {
+                Delete();
+            };
+            cm.Items.Add(deleteItem);
+            this.ContextMenu = cm;
+
         }
 
         private void InputPreview_Loaded(object sender, RoutedEventArgs e)
@@ -76,6 +90,48 @@ namespace XyGraph
                 SocketOuter.BorderBrush = brush2;
             }
             // notify listeners of initial state
+            GraphInputChanged?.Invoke(this);
+        }
+
+
+        // =======================================================================
+        //                            Serialization
+        // =======================================================================
+
+        public JsonObject Save()
+        {
+            JsonObject obj = new JsonObject();
+            obj["id"] = InputId.ToString();
+            obj["name"] = NameBox.Text ?? string.Empty;
+            // prefer resolved Type in Tag, otherwise persist the text
+            if (TypeCombo.Tag is Type t)
+                obj["type"] = t.AssemblyQualifiedName ?? string.Empty;
+            else
+                obj["type"] = TypeCombo.Text ?? string.Empty;
+            return obj;
+        }
+
+        public void Load(JsonObject obj)
+        {
+            if (obj == null) throw new ArgumentNullException(nameof(obj));
+            string idStr = obj["id"]?.GetValue<string>() ?? string.Empty;
+            if (!string.IsNullOrEmpty(idStr) && Guid.TryParse(idStr, out Guid parsed))
+            {
+                InputId = parsed;
+            }
+            NameBox.Text = obj["name"]?.GetValue<string>() ?? string.Empty;
+            string typeName = obj["type"]?.GetValue<string>() ?? string.Empty;
+            if (!string.IsNullOrEmpty(typeName))
+            {
+                Type resolved = ResolveTypeFromName(typeName) ?? typeof(object);
+                TypeCombo.Tag = resolved;
+                TypeCombo.Text = resolved.Name;
+            }
+            else
+            {
+                TypeCombo.Tag = typeof(object);
+                TypeCombo.Text = typeof(object).Name;
+            }
             GraphInputChanged?.Invoke(this);
         }
 
@@ -111,6 +167,33 @@ namespace XyGraph
             }
 
             return null;
+        }
+
+        // Remove this GraphInput and any InputNode instances that reference it from the given graph
+        public void Delete()
+        {
+            if (graph == null) throw new InvalidOperationException("Owner graph not set for GraphInput.");
+
+            // delete any InputNode instances that reference this input id
+            List<Node> nodesToRemove = new List<Node>();
+            foreach (Node n in graph.nodes)
+            {
+                if (n is InputNode inNode && inNode.inputId == this.InputId)
+                {
+                    nodesToRemove.Add(n);
+                }
+            }
+            foreach (Node n in nodesToRemove)
+            {
+                n.Delete();
+            }
+
+            graph.inputs.Remove(this);
+
+            if (this.Parent is ItemsControl ic)
+            {
+                ic.Items.Remove(this);
+            }
         }
     }
 }
