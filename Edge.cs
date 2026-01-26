@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Controls;
 using System.Text.Json.Nodes;
 using System.Reflection;
 using System.Collections;
@@ -73,10 +74,27 @@ namespace XyGraph
                     line.Y1 = start.Y;
                     line.X2 = end.X;
                     line.Y2 = end.Y;
+                    // ensure edge is hit-test visible so context menu can be invoked
+                    line.IsHitTestVisible = true;
+                    // attach context menu if not already present
+                    if (line.ContextMenu == null)
+                    {
+                        ContextMenu cm = new ContextMenu();
+                        MenuItem deleteItem = new MenuItem { Header = "Delete Edge" };
+                        deleteItem.Click += (object s, RoutedEventArgs e) => { this.Delete(); };
+                        cm.Items.Add(deleteItem);
+                        line.ContextMenu = cm;
+                    }
                 }
                 else
                 {
-                    visual = new Line { Stroke = strokeBrush, StrokeThickness = 2, IsHitTestVisible = false, X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y };
+                    Line newLine = new Line { Stroke = strokeBrush, StrokeThickness = 2, IsHitTestVisible = true, X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y };
+                    ContextMenu cm = new ContextMenu();
+                    MenuItem deleteItem = new MenuItem { Header = "Delete Edge" };
+                    deleteItem.Click += (object s, RoutedEventArgs e) => { this.Delete(); };
+                    cm.Items.Add(deleteItem);
+                    newLine.ContextMenu = cm;
+                    visual = newLine;
                 }
             }
             else // Bezier
@@ -99,10 +117,26 @@ namespace XyGraph
                 {
                     path.Data = geometry;
                     path.Stroke = strokeBrush;
+                    // ensure hit testing and context menu
+                    path.IsHitTestVisible = true;
+                    if (path.ContextMenu == null)
+                    {
+                        ContextMenu cm = new ContextMenu();
+                        MenuItem deleteItem = new MenuItem { Header = "Delete Edge" };
+                        deleteItem.Click += (object s, RoutedEventArgs e) => { this.Delete(); };
+                        cm.Items.Add(deleteItem);
+                        path.ContextMenu = cm;
+                    }
                 }
                 else
                 {
-                    visual = new Path { Stroke = strokeBrush, StrokeThickness = 2, IsHitTestVisible = false, Data = geometry };
+                    Path newPath = new Path { Stroke = strokeBrush, StrokeThickness = 2, IsHitTestVisible = true, Data = geometry };
+                    ContextMenu cm = new ContextMenu();
+                    MenuItem deleteItem = new MenuItem { Header = "Delete Edge" };
+                    deleteItem.Click += (object s, RoutedEventArgs e) => { this.Delete(); };
+                    cm.Items.Add(deleteItem);
+                    newPath.ContextMenu = cm;
+                    visual = newPath;
                 }
             }
         }
