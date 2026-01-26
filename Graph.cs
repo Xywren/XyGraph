@@ -26,6 +26,7 @@ namespace XyGraph
         public EndNode endNode { get; internal set; }
         internal MenuItem startItem { get; private set; }
         internal MenuItem endItem { get; private set; }
+        public MenuItem createMenu { get; private set; }
 
         public Guid guid { get; internal set; }
 
@@ -46,18 +47,23 @@ namespace XyGraph
 
             ContextMenu = new ContextMenu();
 
-            startItem = new MenuItem { Header = "Create Start Node" };
-            startItem.Click += (object sender, RoutedEventArgs e) => AddStartNode();
-            ContextMenu.Items.Add(startItem);
+            // Create a top-level Create menu and expose it so callers can add items
+            createMenu = new MenuItem { Header = "Create" };
 
-            endItem = new MenuItem { Header = "Create End Node" };
+            startItem = new MenuItem { Header = "Start" };
+            startItem.Click += (object sender, RoutedEventArgs e) => AddStartNode();
+            createMenu.Items.Add(startItem);
+
+            endItem = new MenuItem { Header = "End" };
             endItem.Click += (object sender, RoutedEventArgs e) => AddEndNode();
-            ContextMenu.Items.Add(endItem);
+            createMenu.Items.Add(endItem);
+
+            ContextMenu.Items.Add(createMenu);
             
         }
 
 
-        private void AddStartNode()
+        public void AddStartNode()
         {
             if (startNode == null)
             {
@@ -68,11 +74,11 @@ namespace XyGraph
                 nodes.Add(startNode);
                 startNode.NodeChanged -= OnNodeChanged;
                 startNode.NodeChanged += OnNodeChanged;
-                startItem.IsEnabled = false;
+                try { if (startItem != null) startItem.IsEnabled = false; } catch { }
             }
         }
 
-        private void AddEndNode()
+        public void AddEndNode()
         {
             if (endNode == null)
             {
@@ -83,7 +89,7 @@ namespace XyGraph
                 nodes.Add(endNode);
                 endNode.NodeChanged -= OnNodeChanged;
                 endNode.NodeChanged += OnNodeChanged;
-                endItem.IsEnabled = false;
+                try { if (endItem != null) endItem.IsEnabled = false; } catch { }
             }
         }
         public void AddNode(Node n, double posX = 0, double posY = 0)
