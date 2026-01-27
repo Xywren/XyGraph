@@ -153,8 +153,8 @@ namespace XyGraph
         {
             Type t = this.GetType();
             BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
-            HandleNodePortAttributes(t, flags);
             HandleNodeMultiPortAttributes(t, flags);
+            HandleNodePortAttributes(t, flags);
         }
 
         //Handles the creation of ports for this node based on NodeInput and NodeOutput attributes
@@ -420,6 +420,12 @@ namespace XyGraph
             }
             return edges;
 
+        }
+
+
+        public void OnNodeMoved()
+        {
+            NodeChanged?.Invoke();
         }
 
         public void RedrawEdges()

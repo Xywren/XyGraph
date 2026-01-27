@@ -11,16 +11,16 @@ using System.Windows.Input;
 
 namespace XyGraph
 {
-    public partial class GraphInput : UserControl
+    public partial class GraphInputDefinition : UserControl
     {
         private Graph graph;
         public Guid InputId { get; private set; } = Guid.NewGuid();
-        public event Action<GraphInput> GraphInputChanged;
+        public event Action<GraphInputDefinition> GraphInputChanged;
 
         public List<Type> AvailableInputTypes { get; set; } = new List<Type> { typeof(object) };
 
         // now requires the owning Graph so deletion can operate without external parameter
-        public GraphInput(Graph graph)
+        public GraphInputDefinition(Graph graph)
         {
             if (graph == null) throw new ArgumentNullException(nameof(graph));
             this.graph = graph;
@@ -202,7 +202,7 @@ namespace XyGraph
                 n.Delete();
             }
 
-            graph.inputs.Remove(this);
+            graph.inputDefinitions.Remove(this);
 
             if (this.Parent is ItemsControl ic)
             {

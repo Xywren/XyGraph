@@ -20,8 +20,14 @@ namespace XyGraph
                 hashBytes = sha.ComputeHash(inputBytes);
             }
 
-            // Derive H, S, L from hash bytes
-            int hue = ((hashBytes[0] << 8) | hashBytes[1]) % 360; // 0-359
+            // Combine multiple hash bytes for maximum variation across full 0-360 spectrum
+            // Using 16 bytes (4 x 32-bit integers) for maximum distribution
+            int hueValue = BitConverter.ToInt32(hashBytes, 0) ^ 
+                          BitConverter.ToInt32(hashBytes, 4) ^ 
+                          BitConverter.ToInt32(hashBytes, 8) ^ 
+                          BitConverter.ToInt32(hashBytes, 12);
+            int hue = Math.Abs(hueValue) % 360; // 0-359
+            
             // Force full saturation (100%) to avoid dull/ugly colours
             double saturation = 1.0;
             // Derive lightness but clamp to 30%-60%

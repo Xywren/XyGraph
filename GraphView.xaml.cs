@@ -28,7 +28,7 @@ namespace XyGraph
         private const string INPUT_PREVIEW_DRAG_FORMAT = "XyGraph.GraphInput";
         private Point previewDragStart;
         private bool previewMouseDown = false;
-        private GraphInput draggingPreview = null;
+        private GraphInputDefinition draggingPreview = null;
         private AdornerLayer previewAdornerLayer = null;
         private InputPreviewAdorner previewAdorner = null;
         private RenderTargetBitmap previewAdornerBitmap = null;
@@ -114,7 +114,7 @@ namespace XyGraph
         {
             // find GraphInput control under mouse
             object src = e.OriginalSource;
-            GraphInput found = FindAncestorOrSelf<GraphInput>(src as DependencyObject);
+            GraphInputDefinition found = FindAncestorOrSelf<GraphInputDefinition>(src as DependencyObject);
             if (found == null) return;
 
             previewDragStart = e.GetPosition(this);
@@ -140,7 +140,7 @@ namespace XyGraph
             const double DRAG_THRESHOLD = 4.0;
             if (System.Math.Abs(delta.X) <= DRAG_THRESHOLD && System.Math.Abs(delta.Y) <= DRAG_THRESHOLD) return;
 
-            GraphInput preview = draggingPreview;
+            GraphInputDefinition preview = draggingPreview;
 
             Size size = new Size(preview.ActualWidth, preview.ActualHeight);
             if (size.Width <= 0 || size.Height <= 0) size = new Size(200, 60);
@@ -187,18 +187,18 @@ namespace XyGraph
         private void AddInputButton_Click(object sender, RoutedEventArgs e)
         {
             // create model/UI GraphInput and add to graph's inputs list
-            GraphInput gi = CreateInputPreview("New Input", "");
-            graph.inputs.Add(gi);
+            GraphInputDefinition gi = CreateInputPreview("New Input", "");
+            graph.inputDefinitions.Add(gi);
             InputsList.Items.Add(gi);
             // focus the name textbox inside the preview
             gi.NameBox.Focus();
             gi.NameBox.SelectAll();
         }
 
-        private GraphInput CreateInputPreview(string name, string typeName)
+        private GraphInputDefinition CreateInputPreview(string name, string typeName)
         {
             double cardWidth = SidebarContent.Width - 46.0;
-            GraphInput preview = new GraphInput(graph);
+            GraphInputDefinition preview = new GraphInputDefinition(graph);
             preview.Width = cardWidth;
             preview.AvailableInputTypes = availableInputTypes;
             preview.NameBox.Text = name;
@@ -206,7 +206,7 @@ namespace XyGraph
             preview.TypeCombo.IsEditable = true;
 
             // subscribe to changes on the preview so we can update existing InputNodes
-            preview.GraphInputChanged += (GraphInput p) => OnGraphInputChanged(p);
+            preview.GraphInputChanged += (GraphInputDefinition p) => OnGraphInputChanged(p);
             return preview;
         }
 
@@ -240,7 +240,7 @@ namespace XyGraph
         {
             if (e.Data == null || !e.Data.GetDataPresent(INPUT_PREVIEW_DRAG_FORMAT)) return;
 
-            GraphInput preview = e.Data.GetData(INPUT_PREVIEW_DRAG_FORMAT) as GraphInput;
+            GraphInputDefinition preview = e.Data.GetData(INPUT_PREVIEW_DRAG_FORMAT) as GraphInputDefinition;
 
             // Only accept drops that actually entered the graph surface during the drag.
             // This prevents immediate drops at the drag source creating unintended nodes.
@@ -334,7 +334,7 @@ namespace XyGraph
             // ensure existing InputsList items (if any) are wired to update handlers
             foreach (object item in InputsList.Items)
             {
-                if (item is GraphInput p)
+                if (item is GraphInputDefinition p)
                 {
                     p.GraphInputChanged -= OnGraphInputChanged;
                     p.GraphInputChanged += OnGraphInputChanged;
@@ -342,7 +342,7 @@ namespace XyGraph
             }
         }
 
-        private void OnGraphInputChanged(GraphInput preview)
+        private void OnGraphInputChanged(GraphInputDefinition preview)
         {
             if (preview == null) return;
             Guid id = preview.InputId;
@@ -458,7 +458,7 @@ namespace XyGraph
         private void PopulateInputsListFromGraph()
         {
             InputsList.Items.Clear();
-            foreach (GraphInput gi in graph.inputs)
+            foreach (GraphInputDefinition gi in graph.inputDefinitions)
             {
                 gi.AvailableInputTypes = availableInputTypes;
                 gi.GraphInputChanged -= OnGraphInputChanged;
@@ -647,16 +647,8 @@ namespace XyGraph
                         Canvas.SetTop(draggedNode, currentTop + delta.Y);
                         dragStartContent = contentPos;
                         if (draggedNode is Node n)
+                        {
                             n.RedrawEdges();
-                        else if (draggedNode is StartNode s)
-                        {
-                            foreach (Edge edge in s.port.edges)
-                                edge.ReDraw();
-                        }
-                        else if (draggedNode is EndNode en)
-                        {
-                            foreach (Edge edge in en.port.edges)
-                                edge.ReDraw();
                         }
                     }
                     break;
@@ -743,6 +735,12 @@ namespace XyGraph
                     break;
                 case MouseState.DraggingNode:
                     {
+
+                        if (draggedNode is Node n)
+                        {
+                            n.OnNodeMoved();
+                        }
+
                         draggedNode = null;
                         ReleaseMouseCapture();
                         mouseState = MouseState.None;

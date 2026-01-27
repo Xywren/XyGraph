@@ -1,4 +1,5 @@
 using System;
+using System.CodeDom;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -23,7 +24,8 @@ namespace XyGraph
         public List<Edge> edges { get; internal set; } = new List<Edge>();
         public List<Node> nodes { get; internal set; } = new List<Node>();
         // graph-level input previews (also act as serialisable data containers)
-        public List<GraphInput> inputs { get; internal set; } = new List<GraphInput>();
+        public List<GraphInputDefinition> inputDefinitions { get; internal set; } = new List<GraphInputDefinition>();
+        public Dictionary<string, GraphInput> inputValues  = new Dictionary<string, GraphInput>();
 
         private const int GRID_SIZE = 20;
 
@@ -33,7 +35,7 @@ namespace XyGraph
         internal MenuItem endItem { get; private set; }
         public MenuItem createMenu { get; private set; }
 
-        public Guid guid { get; internal set; }
+        public Guid guid { get; set; }
 
         public enum GraphStatus
         {
@@ -174,8 +176,8 @@ namespace XyGraph
                 nodes[0].Delete();
 
 
-            while (inputs.Count > 0)
-                inputs[0].Delete();
+            while (inputDefinitions.Count > 0)
+                inputDefinitions[0].Delete();
 
             if (startItem != null)
                 startItem.IsEnabled = true;
@@ -200,6 +202,24 @@ namespace XyGraph
             obj["status"] = status.ToString();
             obj["activeNode"] = activeNode != null ? activeNode.guid.ToString() : null;
 
+
+            // the definitions of inputs, the "slots" that need ot be filled
+            JsonArray inputsArray = new JsonArray();
+            foreach (GraphInputDefinition gi in inputDefinitions)
+            {
+                inputsArray.Add(gi.Save());
+            }
+            obj["inputDefinitions"] = inputsArray;
+
+            // the values of the inputs
+            JsonObject inputValuesObj = new JsonObject();
+            foreach (KeyValuePair<string, GraphInput> kvp in inputValues)
+            {
+                inputValuesObj[kvp.Key] = kvp.Value.Save();
+            }
+            obj["inputValues"] = inputValuesObj;
+
+
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
             {
@@ -208,20 +228,13 @@ namespace XyGraph
 
             obj["nodes"] = nodesArray;
 
-            // persist graph-level inputs
-            JsonArray inputsArray = new JsonArray();
-            foreach (GraphInput gi in inputs)
-            {
-                inputsArray.Add(gi.Save());
-            }
-            obj["inputs"] = inputsArray;
-
             JsonArray edgesArray = new JsonArray();
             foreach (Edge e in edges)
             {
                 edgesArray.Add(e.Save());
             }
             obj["edges"] = edgesArray;
+
 
             return obj;
         }
@@ -242,8 +255,77 @@ namespace XyGraph
                 guid = System.Guid.NewGuid();
             }
 
+
+            // restore runtime status (if present)
+            string statusStr = obj["status"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(statusStr))
+            {
+                if (System.Enum.TryParse<GraphStatus>(statusStr, out GraphStatus parsedStatus))
+                {
+                    status = parsedStatus;
+                }
+            }
+
+            string activeGuidStr = obj["activeNode"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(activeGuidStr))
+            {
+                if (System.Guid.TryParse(activeGuidStr, out System.Guid activeGuid))
+                {
+                    Node found = nodes.FirstOrDefault(n => n.guid == activeGuid);
+                    if (found != null)
+                    {
+                        activeNode = found;
+                    }
+                }
+            }
             // clear existing graph
             Clear();
+
+
+            // load graph-level inputs (if present)
+            JsonArray inputsArray = obj["inputDefinitions"] as JsonArray;
+            if (inputsArray != null)
+            {
+                foreach (JsonNode? item in inputsArray)
+                {
+                    JsonObject inputObj = item as JsonObject;
+                    if (inputObj == null) throw new ArgumentException("Invalid input object in inputs array");
+                    GraphInputDefinition gi = new GraphInputDefinition(this);
+                    gi.Load(inputObj);
+                    inputDefinitions.Add(gi);
+                }
+            }
+            // restore runtime input values (if present)
+            JsonObject inputValuesObj = obj["inputValues"] as JsonObject;
+            if (inputValuesObj != null)
+            {
+                foreach (KeyValuePair<string, JsonNode> kv in inputValuesObj)
+                {
+                    try
+                    {
+                        JsonObject valObj = kv.Value as JsonObject;
+                        if (valObj == null) continue;
+
+                        GraphInput runtime = new GraphInput();
+                        // find matching definition to determine expected type
+                        GraphInputDefinition matched = inputDefinitions.FirstOrDefault(d => d.InputId.ToString() == kv.Key);
+                        Type expected = null;
+                        if (matched != null)
+                        {
+                            JsonObject defObj = matched.Save();
+                            string typeName = defObj["type"]?.GetValue<string>() ?? string.Empty;
+                            if (!string.IsNullOrEmpty(typeName))
+                            {
+                                try { expected = Type.GetType(typeName, false, true); } catch { expected = null; }
+                            }
+                        }
+
+                        runtime.Load(valObj, expected);
+                        inputValues[kv.Key] = runtime;
+                    }
+                    catch { }
+                }
+            }
 
             JsonArray nodesArray = obj["nodes"] as JsonArray;
             if (nodesArray != null)
@@ -275,42 +357,7 @@ namespace XyGraph
                 }
             }
 
-            // load graph-level inputs (if present)
-            JsonArray inputsArray = obj["inputs"] as JsonArray;
-            if (inputsArray != null)
-            {
-                foreach (JsonNode? item in inputsArray)
-                {
-                    JsonObject inputObj = item as JsonObject;
-                    if (inputObj == null) throw new ArgumentException("Invalid input object in inputs array");
-                        GraphInput gi = new GraphInput(this);
-                        gi.Load(inputObj);
-                        inputs.Add(gi);
-                }
-            }
 
-            // restore runtime status (if present)
-            string statusStr = obj["status"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(statusStr))
-            {
-                if (System.Enum.TryParse<GraphStatus>(statusStr, out GraphStatus parsedStatus))
-                {
-                    status = parsedStatus;
-                }
-            }
-
-            string activeGuidStr = obj["activeNode"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(activeGuidStr))
-            {
-                if (System.Guid.TryParse(activeGuidStr, out System.Guid activeGuid))
-                {
-                    Node found = nodes.FirstOrDefault(n => n.guid == activeGuid);
-                    if (found != null)
-                    {
-                        activeNode = found;
-                    }
-                }
-            }
 
             // Set start and end nodes after loading
             startNode = nodes.FirstOrDefault(n => n is StartNode) as StartNode;
@@ -323,6 +370,37 @@ namespace XyGraph
             GraphLoaded?.Invoke();
 
             return this;
+        }
+
+
+        public void ProvideInput(string name, object value)
+        {
+            if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Input name required", nameof(name));
+
+            // try to find a matching definition by name (case-insensitive)
+            GraphInputDefinition matchingDefinition = null;
+            foreach (GraphInputDefinition def in inputDefinitions)
+            {
+                JsonObject defObj = def.Save();
+                string defName = defObj["name"]?.GetValue<string>() ?? string.Empty;
+                if (string.Equals(defName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchingDefinition = def;
+                    break;
+                }
+            }
+            if(matchingDefinition == null) throw new ArgumentException($"No matching input definition found for name '{name}'", nameof(name));
+
+
+            GraphInput runtimeInput = new GraphInput();
+            runtimeInput.name = matchingDefinition.Name;
+            runtimeInput.ID = matchingDefinition.InputId;
+            runtimeInput.Value = value;
+
+            string key = runtimeInput.ID.ToString();
+            runtimeInput.ID = matchingDefinition.InputId;
+
+            inputValues[key] = runtimeInput;
         }
 
 
@@ -440,11 +518,27 @@ namespace XyGraph
         public void Run()
         {
             if (startNode == null) return;
+            InputValidation();
             // clear transient runtime state on ports so each run starts fresh
             ClearRuntimeCache();
             activeNode = startNode;
             status = GraphStatus.Running;
             startNode.Run();
+        }
+
+        private bool InputValidation()
+        {
+            foreach (GraphInputDefinition definition in inputDefinitions)
+            {
+                string key = definition.InputId.ToString();
+                if (!inputValues.ContainsKey(key))
+                {
+                    JsonObject defObj = definition.Save();
+                    string inputName = defObj["name"]?.GetValue<string>() ?? "Unnamed Input";
+                    throw new InvalidOperationException($"Missing required input: '{inputName}'. All graph inputs must be provided before running.");
+                }
+            }
+            return true;
         }
 
         private void ClearRuntimeCache()

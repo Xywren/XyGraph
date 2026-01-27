@@ -59,11 +59,24 @@ namespace XyGraph
                 tb.Foreground = Brushes.White;
             }
 
-            p.connectionType = ConnectionType.Single;
+            p.connectionType = ConnectionType.Multi;
 
             outputContainer.Add(p);
             ports.Add(p);
             outputPort = p;
+        }
+
+        public override void Evaluate()
+        {
+            if (graph == null || outputPort == null) return;
+
+            string key = inputId.ToString();
+            if (graph.inputValues.ContainsKey(key))
+            {
+                GraphInput graphInput = graph.inputValues[key];
+                outputPort.runtimeValue = graphInput.Value;
+                outputPort.hasRuntimeValue = true;
+            }
         }
 
         // Update this InputNode from a master definition (name and type)
