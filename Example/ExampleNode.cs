@@ -80,7 +80,7 @@ namespace XyGraph
             // === Your custom completion behaviour here ===
 
 
-            // once completed run the output
+            // You shold write some custom logic here if you have  multiple outputs to decide which output to run based ona  set of conditions
             output.Run();
         }
         public override void Error()
