@@ -10,6 +10,8 @@ namespace XyGraph
     {
         public static readonly double OffsetX = 14;
         public static readonly double OffsetY = 14;
+        [NodeInput(SocketSize = 20, DrawOuterRing = true, Name = "")]
+        public Node END;
 
         public Port port { get; private set; }
         private Graph graph;
@@ -20,38 +22,19 @@ namespace XyGraph
             this.graph = graph;
 
 
-            //create port
-            Port port = new Port("", PortType.Input, this, 20);
-            port.isEditable = false;
-            port.isRemovable = false;
-            port.socket.Background = Brushes.Black;
-
-            // create border around port
-            Border outline = new Border
-            {
-                Width = 28,
-                Height = 28,
-                BorderBrush = Brushes.Black,
-                BorderThickness = new Thickness(2),
-                CornerRadius = new CornerRadius(12)
-            };
-
-
-            // Hide the title container
-            port.HorizontalAlignment = HorizontalAlignment.Center;
 
             // Hide the title container
             titleContainer.Visibility = Visibility.Collapsed;
 
             // make backgrounds transparent
             mainContainer.Background = Brushes.Transparent;
+            inputContainer.Background = Brushes.Transparent;
             Background = Brushes.Transparent;
             innerBorder.Background = Brushes.Transparent;
 
             // add END text
             TextBlock tb = new TextBlock { Text = "END", HorizontalAlignment = HorizontalAlignment.Center };
-            mainContainer.Add(tb);
-            mainContainer.Add(port);
+            inputContainer.Add(tb);
 
             // add right click delete context item
             this.port = port;

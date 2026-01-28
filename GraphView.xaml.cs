@@ -3,13 +3,36 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Documents;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Globalization;
+using System.Windows.Data;
+using System;
+using System.Reflection;
+using System.Collections.Generic;
+using System.Windows.Markup;
+using System.Windows.Controls.Primitives;
 
 namespace XyGraph
 {
     public partial class GraphView : UserControl
     {
+        // host-configurable preferred types to show in the type selector
+        public List<Type> availableInputTypes { get; set; } = new List<Type> { typeof(object) };
+
+        private bool sidebarSlidOff = false;
+        private System.Windows.Media.Animation.DoubleAnimation slideAnimation;
         private const double WORLD_SIZE = 10000;
+        private const int VISUAL_TREE_SEARCH_DEPTH = 10;
+        private const string INPUT_PREVIEW_DRAG_FORMAT = "XyGraph.GraphInput";
+        private Point previewDragStart;
+        private bool previewMouseDown = false;
+        private GraphInputDefinition draggingPreview = null;
+        private AdornerLayer previewAdornerLayer = null;
+        private InputPreviewAdorner previewAdorner = null;
+        private RenderTargetBitmap previewAdornerBitmap = null;
+        private bool previewDragOverGraph = false;
         // Cached transforms for the inner graph to avoid repeated visual-tree searches
         private TransformGroup transformGroup;
         private ScaleTransform scaleTransform;
@@ -22,10 +45,14 @@ namespace XyGraph
         public GraphView()
         {
             InitializeComponent();
-            Loaded += GraphView_Loaded;
+            Loaded += GraphViewLoaded;
+            SizeChanged += GraphView_SizeChanged;
+            // listen for graph load events so the sidebar can refresh inputs
+            graph.GraphLoaded -= OnGraphLoaded;
+            graph.GraphLoaded += OnGraphLoaded;
 
             // Set Graph to desired Size
-            graph.WorldSize = WORLD_SIZE;
+            graph.worldSize = WORLD_SIZE;
             graph.Width = WORLD_SIZE;
             graph.Height = WORLD_SIZE;
 
@@ -48,6 +75,351 @@ namespace XyGraph
             this.MouseMove += GraphView_MouseMove;
             this.MouseLeftButtonUp += GraphView_MouseLeftButtonUp;
             this.MouseRightButtonDown += GraphView_MouseRightButtonDown;
+
+            // sidebar toggle button
+            ToggleSidebarButton.Click += ToggleSidebarButton_Click;
+            // add input button
+            AddInputButton.Click += AddInputButton_Click;
+            // centralized drag handlers for InputsList items (covers loaded and new previews)
+            InputsList.PreviewMouseLeftButtonDown += InputsList_PreviewMouseLeftButtonDown;
+            InputsList.PreviewMouseMove += InputsList_PreviewMouseMove;
+            InputsList.PreviewMouseLeftButtonUp += InputsList_PreviewMouseLeftButtonUp;
+            // enable drag-drop from input previews into the graph
+            graph.AllowDrop = true;
+            graph.DragOver += Graph_DragOver;
+            graph.DragLeave += Graph_DragLeave;
+            graph.Drop += Graph_Drop;
+
+            // log tunneling preview mouse down (captures handled events too)
+            this.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent,
+                new MouseButtonEventHandler((object s, MouseButtonEventArgs e) =>
+                {
+                    System.Diagnostics.Debug.WriteLine($"PreviewMouseLeftButtonDown: sender={s.GetType().Name}, orig={e.OriginalSource?.GetType().Name}, handled={e.Handled}, clickCount={e.ClickCount}");
+                }), handledEventsToo: true);
+
+            // log bubbling mouse down
+            this.AddHandler(UIElement.MouseLeftButtonDownEvent,
+                new MouseButtonEventHandler((object s, MouseButtonEventArgs e) =>
+                {
+                    System.Diagnostics.Debug.WriteLine($"MouseLeftButtonDown: sender={s.GetType().Name}, orig={e.OriginalSource?.GetType().Name}, handled={e.Handled}, clickCount={e.ClickCount}");
+                }), handledEventsToo: true);
+
+        }
+
+        // =======================================================================
+        //                            InputsList drag handlers
+        // =======================================================================
+
+        private void InputsList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // find GraphInput control under mouse
+            object src = e.OriginalSource;
+            GraphInputDefinition found = FindAncestorOrSelf<GraphInputDefinition>(src as DependencyObject);
+            if (found == null) return;
+
+            previewDragStart = e.GetPosition(this);
+            previewMouseDown = true;
+            draggingPreview = found;
+            e.Handled = false;
+        }
+
+        private void InputsList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            previewMouseDown = false;
+            draggingPreview = null;
+        }
+
+        private void InputsList_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!previewMouseDown) return;
+            if (e.LeftButton != MouseButtonState.Pressed) return;
+            if (draggingPreview == null) return;
+
+            Point current = e.GetPosition(this);
+            Vector delta = current - previewDragStart;
+            const double DRAG_THRESHOLD = 4.0;
+            if (System.Math.Abs(delta.X) <= DRAG_THRESHOLD && System.Math.Abs(delta.Y) <= DRAG_THRESHOLD) return;
+
+            GraphInputDefinition preview = draggingPreview;
+
+            Size size = new Size(preview.ActualWidth, preview.ActualHeight);
+            if (size.Width <= 0 || size.Height <= 0) size = new Size(200, 60);
+            preview.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            preview.Arrange(new Rect(size));
+            RenderTargetBitmap bmp = new RenderTargetBitmap((int)System.Math.Ceiling(size.Width), (int)System.Math.Ceiling(size.Height), 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(preview);
+
+            previewAdornerBitmap = bmp;
+            previewAdornerLayer = AdornerLayer.GetAdornerLayer(this.rootGrid);
+            if (previewAdornerLayer != null)
+            {
+                previewAdorner = new InputPreviewAdorner(this.rootGrid, bmp);
+                previewAdorner.SetOffset(new Point(-100, -100));
+                previewAdornerLayer.Add(previewAdorner);
+            }
+
+            System.Windows.DataObject data = new System.Windows.DataObject(INPUT_PREVIEW_DRAG_FORMAT, preview);
+            DragDrop.DoDragDrop(preview, data, DragDropEffects.Copy);
+
+            if (previewAdornerLayer != null && previewAdorner != null)
+            {
+                previewAdornerLayer.Remove(previewAdorner);
+                previewAdorner = null;
+                previewAdornerLayer = null;
+                previewAdornerBitmap = null;
+                previewDragOverGraph = false;
+            }
+
+            previewMouseDown = false;
+            draggingPreview = null;
+        }
+
+        private static T FindAncestorOrSelf<T>(DependencyObject current) where T : DependencyObject
+        {
+            while (current != null)
+            {
+                if (current is T t) return t;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return null;
+        }
+
+        private void AddInputButton_Click(object sender, RoutedEventArgs e)
+        {
+            // create model/UI GraphInput and add to graph's inputs list
+            GraphInputDefinition gi = CreateInputPreview("New Input", "");
+            graph.inputDefinitions.Add(gi);
+            InputsList.Items.Add(gi);
+            // focus the name textbox inside the preview
+            gi.NameBox.Focus();
+            gi.NameBox.SelectAll();
+        }
+
+        private GraphInputDefinition CreateInputPreview(string name, string typeName)
+        {
+            double cardWidth = SidebarContent.Width - 46.0;
+            GraphInputDefinition preview = new GraphInputDefinition(graph);
+            preview.Width = cardWidth;
+            preview.AvailableInputTypes = availableInputTypes;
+            preview.NameBox.Text = name;
+            preview.TypeCombo.Text = typeName;
+            preview.TypeCombo.IsEditable = true;
+
+            // subscribe to changes on the preview so we can update existing InputNodes
+            preview.GraphInputChanged += (GraphInputDefinition p) => OnGraphInputChanged(p);
+            return preview;
+        }
+
+        private void Graph_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data != null && e.Data.GetDataPresent(INPUT_PREVIEW_DRAG_FORMAT))
+            {
+                e.Effects = DragDropEffects.Copy;
+                previewDragOverGraph = true;
+                if (previewAdorner != null)
+                {
+                    // position the adorner at the current mouse position relative to rootGrid
+                    Point p = e.GetPosition(this.rootGrid);
+                    previewAdorner.SetOffset(p);
+                }
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+                previewDragOverGraph = false;
+            }
+            e.Handled = true;
+        }
+
+        private void Graph_DragLeave(object sender, DragEventArgs e)
+        {
+            previewDragOverGraph = false;
+        }
+
+        private void Graph_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data == null || !e.Data.GetDataPresent(INPUT_PREVIEW_DRAG_FORMAT)) return;
+
+            GraphInputDefinition preview = e.Data.GetData(INPUT_PREVIEW_DRAG_FORMAT) as GraphInputDefinition;
+
+            // Only accept drops that actually entered the graph surface during the drag.
+            // This prevents immediate drops at the drag source creating unintended nodes.
+            if (!previewDragOverGraph)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            string inputName = "Input";
+            Type resolvedType = typeof(object);
+            if (preview != null)
+            {
+                inputName = preview.NameBox.Text ?? "Input";
+                object tag = preview.TypeCombo.Tag;
+                if (tag is Type t) resolvedType = t;
+                else
+                {
+                    string typeText = preview.TypeCombo.Text ?? string.Empty;
+                    Type maybe = ResolveTypeFromName(typeText);
+                    if (maybe != null) resolvedType = maybe;
+                }
+            }
+
+            // get drop point in canvas coordinates (graph is a Canvas)
+            Point canvasPoint = e.GetPosition(graph);
+            // Ignore drops that occur inside the sidebar area (likely the source) or outside graph bounds
+            // if drop is inside the SidebarContainer, treat as no-op
+            Point pSidebar = e.GetPosition(SidebarContainer);
+            if (pSidebar.X >= 0 && pSidebar.X <= SidebarContainer.ActualWidth && pSidebar.Y >= 0 && pSidebar.Y <= SidebarContainer.ActualHeight)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // ensure the drop point is within the graph visible area
+            if (double.IsNaN(canvasPoint.X) || double.IsNaN(canvasPoint.Y) || canvasPoint.X < 0 || canvasPoint.Y < 0 || canvasPoint.X > graph.ActualWidth || canvasPoint.Y > graph.ActualHeight)
+            {
+                e.Handled = true;
+                return;
+            }
+            // Use the preview's InputId so nodes can be linked to the master preview
+            Guid id = Guid.NewGuid();
+            if (preview != null) id = preview.InputId;
+            InputNode inNode = new InputNode(graph, id, inputName, resolvedType);
+            AddNode(inNode, canvasPoint.X - inNode.SpawnOffsetX, canvasPoint.Y - inNode.SpawnOffsetY);
+
+            // Also add node to list UI? The previews are shown in InputsList; keep them independent.
+
+            e.Handled = true;
+        }
+
+        
+
+        private Type ResolveTypeFromName(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return null;
+
+            // check preferred list first
+            foreach (Type t in availableInputTypes)
+            {
+                if (string.Equals(t.Name, input, StringComparison.OrdinalIgnoreCase) || string.Equals(t.FullName, input, StringComparison.OrdinalIgnoreCase))
+                    return t;
+            }
+
+            // try Type.GetType (supports assembly-qualified names)
+            try
+            {
+                Type byName = Type.GetType(input, false, true);
+                if (byName != null) return byName;
+            }
+            catch { }
+
+            // search loaded assemblies for simple name match
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+                try { types = asm.GetTypes(); } catch { continue; }
+                foreach (Type t in types)
+                {
+                    if (string.Equals(t.Name, input, StringComparison.OrdinalIgnoreCase)) return t;
+                }
+            }
+
+            return null;
+        }
+
+        private void GraphView_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateSidebarLayout();
+            // ensure existing InputsList items (if any) are wired to update handlers
+            foreach (object item in InputsList.Items)
+            {
+                if (item is GraphInputDefinition p)
+                {
+                    p.GraphInputChanged -= OnGraphInputChanged;
+                    p.GraphInputChanged += OnGraphInputChanged;
+                }
+            }
+        }
+
+        private void OnGraphInputChanged(GraphInputDefinition preview)
+        {
+            if (preview == null) return;
+            Guid id = preview.InputId;
+            string name = preview.NameBox.Text ?? string.Empty;
+            Type resolved = null;
+            if (preview.TypeCombo.Tag is Type t) resolved = t;
+            else resolved = ResolveTypeFromName(preview.TypeCombo.Text ?? string.Empty) ?? typeof(object);
+
+            // find all InputNode instances with this id and update them
+            foreach (Node n in graph.nodes)
+            {
+                if (n is InputNode inNode && inNode.inputId == id)
+                {
+                    inNode.HandleGraphInputChange(name, resolved);
+                }
+            }
+        }
+
+
+        private void UpdateSidebarLayout()
+        {
+            const double toggleHalf = 14.0; // half of toggle width used for overlap
+            double totalWidth = this.ActualWidth;
+            if (double.IsNaN(totalWidth) || totalWidth <= 0.0) return;
+
+
+            // position the toggle button inside the container so it overlaps the right edge of the sidebar
+            double buttonLeft = SidebarContent.Width - toggleHalf;
+            ToggleSidebarButton.Margin = new Thickness(buttonLeft, 0, 0, 0);
+            ToggleSidebarButton.HorizontalAlignment = HorizontalAlignment.Left;
+        }
+
+        private void ToggleSidebarButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleSidebar();
+        }
+
+        private void ToggleSidebar()
+        {
+            const double animationDurationSeconds = 0.32;
+
+            if (!sidebarSlidOff)
+            {
+                double to = -SidebarContent.Width;
+                slideAnimation = new System.Windows.Media.Animation.DoubleAnimation(0, to, new Duration(TimeSpan.FromSeconds(animationDurationSeconds)));
+                slideAnimation.EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+                SidebarContainerTranslate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, slideAnimation);
+                ToggleSidebarButton.ToolTip = "Expand sidebar";
+                ToggleIconPath.Data = Geometry.Parse("M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z");
+                sidebarSlidOff = true;
+            }
+            else
+            {
+                slideAnimation = new System.Windows.Media.Animation.DoubleAnimation(SidebarContainerTranslate.X, 0, new Duration(TimeSpan.FromSeconds(animationDurationSeconds)));
+                slideAnimation.EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+                SidebarContainerTranslate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, slideAnimation);
+                ToggleSidebarButton.ToolTip = "Collapse sidebar";
+                ToggleIconPath.Data = Geometry.Parse("M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z");
+                sidebarSlidOff = false;
+            }
+            UpdateSidebarLayout();
+
+        }
+
+
+        // Walk up to VISUAL_TREE_SEARCH_DEPTH ancestors to find a Socket. Returns null if none found.
+        private Socket GetSocketFromSource(object source)
+        {
+            DependencyObject element = source as DependencyObject;
+            int depth = 0;
+            while (element != null && element != graph && depth < VISUAL_TREE_SEARCH_DEPTH)
+            {
+                if (element is Socket s) return s;
+                element = VisualTreeHelper.GetParent(element);
+                depth++;
+            }
+            return null;
         }
 
         // Expose a helper to run the graph's start node from higher-level UIs
@@ -60,7 +432,7 @@ namespace XyGraph
         // The visual Canvas used for the graph uses content coordinates with (0,0) at the top-left
         // while the graph's logical/world origin is intended to be the center.
         // On load the view must pan the canvas so that the graph's center is visible at the control's center. This method performs that initial centering.
-        private void GraphView_Loaded(object sender, RoutedEventArgs e)
+        private void GraphViewLoaded(object sender, RoutedEventArgs e)
         {
             double graphOriginOffset = WORLD_SIZE / 2.0;
             double viewportCenterX = ActualWidth / 2.0;
@@ -70,6 +442,29 @@ namespace XyGraph
             Point mapped = transformMatrix.Transform(new Point(graphOriginOffset, graphOriginOffset));
             translateTransform.X += viewportCenterX - mapped.X;
             translateTransform.Y += viewportCenterY - mapped.Y;
+            UpdateSidebarLayout();
+            // initial population of inputs list from graph
+            PopulateInputsListFromGraph();
+        }
+
+        //not to be confused with GraphViewLoaded
+        // this is called whenever a saved graph is loaded in the graph, not when the graph view is loaded up
+        private void OnGraphLoaded()
+        {
+            // repopulate input previews when a new graph is loaded
+            PopulateInputsListFromGraph();
+        }
+
+        private void PopulateInputsListFromGraph()
+        {
+            InputsList.Items.Clear();
+            foreach (GraphInputDefinition gi in graph.inputDefinitions)
+            {
+                gi.AvailableInputTypes = availableInputTypes;
+                gi.GraphInputChanged -= OnGraphInputChanged;
+                gi.GraphInputChanged += OnGraphInputChanged;
+                InputsList.Items.Add(gi);
+            }
         }
 
         public void AddNode(Node n, double posX = 0, double posY = 0)
@@ -187,19 +582,14 @@ namespace XyGraph
         {
             if (mouseState != MouseState.None) return;
 
-            if (e.OriginalSource is Socket clickedSocket)
+            // if a socket (or a child of a socket) was clicked, start creating an edge
+            Socket clickedSocket = GetSocketFromSource(e.OriginalSource);
+            if (clickedSocket != null)
             {
-                // prefer the explicit socket.port but fall back to walking up the visual tree
-                // in case socket.port was not set for some reason (eg. templating / deserialization issues)
                 edgeStartPort = clickedSocket.port;
                 if (edgeStartPort == null)
                 {
-                    DependencyObject parent = clickedSocket;
-                    while (parent != null && parent != graph)
-                    {
-                        if (parent is Port p) { edgeStartPort = p; break; }
-                        parent = VisualTreeHelper.GetParent(parent);
-                    }
+                    edgeStartPort = clickedSocket.port;
                 }
                 mouseState = MouseState.CreatingEdge;
                 tempConnectionLine = new Line { Stroke = Brushes.Black, StrokeThickness = 2, IsHitTestVisible = false };
@@ -257,16 +647,8 @@ namespace XyGraph
                         Canvas.SetTop(draggedNode, currentTop + delta.Y);
                         dragStartContent = contentPos;
                         if (draggedNode is Node n)
+                        {
                             n.RedrawEdges();
-                        else if (draggedNode is StartNode s)
-                        {
-                            foreach (Edge edge in s.port.edges)
-                                edge.UpdatePosition();
-                        }
-                        else if (draggedNode is EndNode en)
-                        {
-                            foreach (Edge edge in en.port.edges)
-                                edge.UpdatePosition();
                         }
                     }
                     break;
@@ -289,7 +671,7 @@ namespace XyGraph
                         // convert viewport mouse to content/canvas coords
                         Point mousePosContent = ViewportToCanvas(viewportPos);
                         // start position of socket in canvas coords
-                        int startOffset = edgeStartPort.socket.size / 2;
+                        int startOffset = (int)edgeStartPort.socket.ActualWidth/2;
                         Point startPos = edgeStartPort.socket.TranslatePoint(new Point(startOffset, startOffset), graph);
                         tempConnectionLine.X1 = startPos.X;
                         tempConnectionLine.Y1 = startPos.Y;
@@ -302,9 +684,11 @@ namespace XyGraph
                         {
                             foreach (Port p in node.ports)
                             {
-                                if (p != edgeStartPort && p.type != edgeStartPort.type)
+                                // Only consider ports that are opposite direction, not the start port, and have the same CLR type
+                                if (p != edgeStartPort && p.direction != edgeStartPort.direction &&
+                                    p.portType != null && edgeStartPort.portType != null && p.portType == edgeStartPort.portType)
                                 {
-                                    int endOffset = p.socket.size / 2;
+                                    int endOffset = (int)p.socket.ActualWidth / 2;
                                     Point portPos = p.socket.TranslatePoint(new Point(endOffset, endOffset), graph);
                                     double dist = (mousePosContent - portPos).Length;
                                     if (dist < minDist)
@@ -332,9 +716,11 @@ namespace XyGraph
                     {
                         if (targetPort != null)
                         {
-                            // create the permanent edge via Graph.CreateEdge
-                            if (edgeStartPort != null)
+                            // Only create the edge if the two ports have the same CLR type
+                            if (edgeStartPort != null && edgeStartPort.portType != null && targetPort.portType != null && edgeStartPort.portType == targetPort.portType)
+                            {
                                 graph.CreateEdge(edgeStartPort, targetPort);
+                            }
                         }
                         if (tempConnectionLine != null)
                         {
@@ -349,6 +735,12 @@ namespace XyGraph
                     break;
                 case MouseState.DraggingNode:
                     {
+
+                        if (draggedNode is Node n)
+                        {
+                            n.OnNodeMoved();
+                        }
+
                         draggedNode = null;
                         ReleaseMouseCapture();
                         mouseState = MouseState.None;

@@ -1,5 +1,9 @@
 using System;
+using System.Reflection;
+using System.CodeDom;
 using System.Text.Json.Nodes;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -7,231 +11,316 @@ using System.Xml.Linq;
 
 namespace XyGraph
 {
-    public enum PortType { Input, Output }
+    public enum PortDirection { Input, Output }
     public enum ConnectionType { Single, Multi}
 
     public class Socket : Border
     {
+        // serialised elements
         public Port port;
         public int size;
+        private bool hasOuterRing;
 
-        public Socket(int size = 10)
+        public Socket(int size = 10, bool drawOuterRing = true)
         {
             this.size = size;
-            Width = size;
-            Height = size;
-            Background = Brushes.Black;
-            CornerRadius = new CornerRadius(size);
+            this.hasOuterRing = drawOuterRing;
+
+            // outer ring will be the Border (this). inner circle will be a child Border.
+            if (drawOuterRing)
+            {
+                int outerSize = size + 8; // provide padding for the ring
+                Width = outerSize;
+                Height = outerSize;
+                Background = Brushes.Transparent;
+                CornerRadius = new CornerRadius(outerSize / 2.0);
+                BorderThickness = new Thickness(2);
+            }
+            else
+            {
+                // no outer ring: size to inner circle and no border thickness
+                Width = size;
+                Height = size;
+                Background = Brushes.Transparent;
+                CornerRadius = new CornerRadius(size / 2.0);
+                BorderThickness = new Thickness(0);
+            }
+
+            Border inner = new Border();
+            inner.Width = size;
+            inner.Height = size;
+            inner.Background = Brushes.Black;
+            inner.CornerRadius = new CornerRadius(size / 2.0);
+            inner.HorizontalAlignment = HorizontalAlignment.Center;
+            inner.VerticalAlignment = VerticalAlignment.Center;
+
+            this.Child = inner;
+        }
+
+        public void SetColor(Brush b)
+        {
+            if (this.Child is Border inner)
+            {
+                inner.Background = b;
+            }
+            this.BorderBrush = b;
+        }
+
+        public Brush GetColor()
+        {
+            if (this.Child is Border inner)
+            {
+                return inner.Background as Brush ?? Brushes.Black;
+            }
+            return Brushes.Black;
         }
     }
 
     public class Port : Border
     {
-        public Guid guid;
-
         private const int DEFAULT_SOCKET_SIZE = 10;
-        private const int BUTTON_WIDTH = 20;
-        private const int BUTTON_HEIGHT = 20;
 
-        public PortType type; // is this an input or output port?
+        // serialised elements
+        public Guid guid;
+        public PortDirection direction; // is this an input or output port?
+        public Socket socket;
         public ConnectionType connectionType = ConnectionType.Single; // does this port suport single or multiple edges?
         public string name;
-        public Socket socket;
-        private UIElement label;
-        internal NodeContainer parentContainer;
-        private Button button;
+        public Type portType;
+        public Brush colour
+        {
+            get { return socket?.GetColor(); }
+            set { if (socket != null) socket.SetColor(value); }
+        }
 
+        // non-serialised elements
+        public UIElement label;
+        public TextBlock typeLabel;
+        internal NodeContainer parentContainer;
+
+        public MemberInfo ownerMember; // magic code that lets us set Inputs and Outputs on subclasses of Node
+        public int ownerIndex = -1; // optional owner metadata for multi-output grouping
+        public string ownerMemberName = null;
+
+        // Edit-time properties
         public List<Edge> edges = new List<Edge>();
 
-        public bool isEditable
-        {
-            get
-            {
-                // if label is a textbox then port is editable
-                // if label is a textblock then port is not editable
-                if (Child is Grid g)
-                {
-                    foreach (UIElement child in g.Children)
-                    {
-                        if (Grid.GetColumn(child) == 1)
-                            return child is TextBox;
-                    }
-                }
-                return false;
-            }
-            set
-            {
-                // Find the child occupying column 1 (the label column) and its index in the Grid.
-                // If the current control type (TextBox vs TextBlock) doesn't match the requested state,
-                // replace that element in-place so layout/order is preserved.
-                if (Child is Grid g)
-                {
-
-                    // find the grid index of the label (label is always in column 1, but index may differ)
-                    UIElement current = null;
-                    int idx = -1;
-                    for (int i = 0; i < g.Children.Count; i++)
-                    {
-                        if (Grid.GetColumn(g.Children[i]) == 1)
-                        {
-                            current = g.Children[i];
-                            idx = i;
-                            break;
-                        }
-                    }
-
-                    if (idx == -1) return;
-
-                    // Determine whether the current visual is editable
-                    bool currentlyEditable = current is TextBox;
-
-                    // Only perform the replacement the the value has changed (not setting IsEditable = true when its already true)
-                    if (currentlyEditable != value)
-                    {
-                        // Remove the existing label
-                        g.Children.RemoveAt(idx);
-
-                        //create the new label
-                        UpdateLabel(value);
-
-                        // insert the new label in correct position
-                        g.Children.Insert(idx, label);
-                        Grid.SetColumn(label, 1);
-                    }
-                }
-            }
-        }
+        // Transient runtime state (cleared at start of a graph run)
+        // Stores the computed value for this output port during a run.
+        public object runtimeValue;
+        // Whether runtimeValue contains a valid computed value.
+        public bool hasRuntimeValue = false;
+        // Used for cycle detection while evaluating this port/node.
+        internal bool isEvaluating = false;
 
 
-
-        public bool isRemovable
-        {
-            get;
-            set
-            {
-                button.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-            }
-        }
-
-        private void UpdateLabel(bool editable)
-        {
-
-            HorizontalAlignment alignment = type == PortType.Input ? HorizontalAlignment.Left : HorizontalAlignment.Right;
-            if (editable)
-            {
-                TextBox textBox = new TextBox { Text = name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
-                textBox.TextChanged += (object sender, TextChangedEventArgs e) => { name = textBox.Text; };
-                textBox.HorizontalAlignment = alignment;
-                label = textBox;
-            }
-            else
-            {
-                TextBlock textBlock = new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
-                textBlock.HorizontalAlignment = alignment;
-                label = textBlock;
-            }
-        }
-
-        public Port(string name, PortType type, Node node, int socketSize = DEFAULT_SOCKET_SIZE)
+        public Port(string name, PortDirection direction, Type type, int socketSize = DEFAULT_SOCKET_SIZE, Brush color = null, bool drawSocketOuterRing = true)
         {
             guid = Guid.NewGuid();
-
             this.name = name;
-            this.type = type;
+            this.portType = type;
+            this.direction = direction;
+
+            socket = new Socket(socketSize, drawSocketOuterRing);
+            socket.port = this;
+
+            // build simple UI: socket and label. For input ports socket is left, for outputs socket is right.
             Background = Brushes.Transparent;
+
             Grid grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            socket = new Socket(socketSize);
-            socket.port = this;
-            button = new Button { Content = "X", Width = BUTTON_WIDTH, Height = BUTTON_HEIGHT };
-            button.Click += (s, e) => {
-                Delete();
-            };
-            button.Visibility = Visibility.Collapsed;
-            UpdateLabel(isEditable);
-            if (type == PortType.Input)
+
+            // Align the grid to the side of the node depending on port direction so ports sit flush
+            // against the left (inputs) or right (outputs) edges.
+            if (direction == PortDirection.Input)
+                grid.HorizontalAlignment = HorizontalAlignment.Left;
+            else
+                grid.HorizontalAlignment = HorizontalAlignment.Right;
+
+            TextBlock textBlock = new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 5, 0) };
+            label = textBlock;
+
+            // create a small type label to display underneath the socket (e.g. "<Node>")
+            string typeName = (portType != null) ? portType.Name : "object";
+            typeLabel = new TextBlock { Text = $"<{typeName}>", FontSize = 6, Foreground = Brushes.LightGray, Margin = new Thickness(0, -2, 0, 0) };
+            // align type label: left for input ports, right for output ports
+            if (direction == PortDirection.Input)
+            {
+                typeLabel.HorizontalAlignment = HorizontalAlignment.Left;
+                typeLabel.TextAlignment = TextAlignment.Left;
+            }
+            else
+            {
+                typeLabel.HorizontalAlignment = HorizontalAlignment.Right;
+                typeLabel.TextAlignment = TextAlignment.Right;
+            }
+
+            // create vertical stack which contains a horizontal row (socket + label) and the small type label underneath
+            // align the stack to the left for inputs and right for outputs so sockets align on the node edges
+            StackPanel verticalStack = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = (direction == PortDirection.Input) ? HorizontalAlignment.Left : HorizontalAlignment.Right };
+
+            if (direction == PortDirection.Input)
             {
                 connectionType = ConnectionType.Multi;
-                Grid.SetColumn(socket, 0);
-                Grid.SetColumn(label, 1);
-                Grid.SetColumn(button, 2);
-                grid.ColumnDefinitions[1].Width = GridLength.Auto;
-                grid.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
+                // horizontal stack: [ socket | label ] so label sits directly to the right of the socket
+                StackPanel horiz = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+                horiz.Children.Add(socket);
+                horiz.Children.Add(label);
+
+                verticalStack.Children.Add(horiz);
+                verticalStack.Children.Add(typeLabel);
+
+                Grid.SetColumn(verticalStack, 0);
+                Grid.SetColumnSpan(verticalStack, 2);
+                grid.Children.Add(verticalStack);
             }
             else
             {
                 connectionType = ConnectionType.Single;
-                Grid.SetColumn(button, 0);
-                Grid.SetColumn(label, 1);
-                Grid.SetColumn(socket, 2);
+                // horizontal stack: [ label | socket ] so label sits directly to the left of the socket
+                StackPanel horiz = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+                horiz.Children.Add(label);
+                horiz.Children.Add(socket);
+
+                verticalStack.Children.Add(horiz);
+                verticalStack.Children.Add(typeLabel);
+
+                Grid.SetColumn(verticalStack, 1);
+                Grid.SetColumnSpan(verticalStack, 2);
+                grid.Children.Add(verticalStack);
             }
-            grid.Children.Add(button);
-            grid.Children.Add(socket);
-            grid.Children.Add(label);
+
             Child = grid;
-        }
 
-        internal void ConnectionMade(Edge connection)
-        {
-            if (connectionType == ConnectionType.Single)
+            // apply initial colour if provided
+            if (color != null)
             {
-                foreach (Edge edge in edges.ToList())
-                {
-                    edge.Delete();
-                }
-            }
-
-            edges.Add(connection);
-        }
-
-        public void Delete()
-        {
-            if (parentContainer != null)
-            {
-                foreach (Edge edge in edges.ToList())
-                {
-                    edge.Delete();
-                }
-
-                parentContainer.Remove(this);
+                socket.SetColor(color);
             }
         }
 
-        //
+
+
+        // =======================================================================
+        //                            Serialization
+        // =======================================================================
+
+
+        // Serialize this port to JSON for saving in a node/graph.
         public JsonObject Save()
         {
-            var obj = new JsonObject
+            JsonObject obj = new JsonObject
             {
                 ["id"] = guid.ToString(),
                 ["name"] = name ?? string.Empty,
-                ["portType"] = type.ToString(),
-                ["connectionType"] = connectionType.ToString()
+                ["direction"] = direction.ToString(),
+                ["portType"] = portType?.AssemblyQualifiedName ?? string.Empty,
+                ["connectionType"] = connectionType.ToString(),
+                ["socketSize"] = socket?.size ?? DEFAULT_SOCKET_SIZE
             };
+
+            // save colour as a string if possible
+            try
+            {
+                Brush b = socket?.GetColor() ?? Brushes.Black;
+                var conv = new BrushConverter();
+                string s = conv.ConvertToString(b) ?? "Black";
+                obj["color"] = s;
+            }
+            catch
+            {
+                obj["color"] = "Black";
+            }
+
+            // persist optional owner metadata for multi-output grouping
+            if (!string.IsNullOrEmpty(ownerMemberName) && ownerIndex >= 0)
+            {
+                obj["ownerMember"] = ownerMemberName;
+                obj["ownerIndex"] = ownerIndex;
+            }
 
             return obj;
         }
 
-        // used whem loading a port from Json. this will create a Port instance and return it when all data is loaded into it
+        // Load a port from its saved JSON representation. The caller will add the returned Port into the appropriate container.
         public static Port Load(JsonObject obj, Node node)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
 
             string name = obj["name"]?.GetValue<string>() ?? string.Empty;
-            PortType pType = Enum.Parse<PortType>(obj["portType"]?.GetValue<string>() ?? PortType.Input.ToString());
+            PortDirection pType = Enum.Parse<PortDirection>(obj["direction"]?.GetValue<string>() ?? PortDirection.Input.ToString());
 
-            // create port with name and type
-            Port p = new Port(name, pType, node);
+            // attempt to resolve the port's system.Type
+            string typeName = obj["portType"]?.GetValue<string>() ?? string.Empty;
+            Type resolvedType = null;
+            if (!string.IsNullOrEmpty(typeName))
+            {
+                resolvedType = Type.GetType(typeName);
+            }
+
+            int socketSize = obj["socketSize"]?.GetValue<int?>() ?? DEFAULT_SOCKET_SIZE;
+
+            // parse color
+            Brush colorBrush = Brushes.Black;
+            string colorStr = obj["color"]?.GetValue<string>() ?? "Black";
+            try
+            {
+                BrushConverter conv = new BrushConverter();
+                colorBrush = (Brush)conv.ConvertFromString(colorStr);
+            }
+            catch
+            {
+                colorBrush = Brushes.Black;
+            }
+
+            // create port with name and resolved type (fall back to object if unresolved)
+            Port p = new Port(name, pType, resolvedType ?? typeof(object), socketSize, colorBrush);
 
             // restore GUID and connection type
             p.guid = Guid.Parse(obj["id"]?.GetValue<string>() ?? p.guid.ToString());
             p.connectionType = Enum.Parse<ConnectionType>(obj["connectionType"]?.GetValue<string>() ?? p.connectionType.ToString());
 
-            // refresh label to reflect loaded name
-            p.UpdateLabel(p.isEditable);
+            // restore optional owner metadata
+            p.ownerMemberName = obj["ownerMember"]?.GetValue<string>();
+            p.ownerIndex = obj["ownerIndex"]?.GetValue<int?>() ?? -1;
 
             return p;
+        }
+
+
+
+
+        // =======================================================================
+        //                            Edit-Time functions
+        // =======================================================================
+        public void Delete()
+        {
+            foreach (Edge edge in edges.ToList())
+            {
+                edge.Delete();
+            }
+            if (parentContainer != null)
+            {
+                parentContainer.Remove(this);
+            }
+        }
+
+        internal void ConnectionMade(Edge connection)
+        {
+            if (connection == null) return;
+
+            // If this port only supports a single connection, remove existing edges first
+            if (connectionType == ConnectionType.Single)
+            {
+                foreach (Edge e in edges.ToList())
+                {
+                    e.Delete();
+                }
+            }
+
+            edges.Add(connection);
         }
     }
 }

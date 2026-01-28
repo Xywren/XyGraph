@@ -1,3 +1,5 @@
+using System;
+using System.CodeDom;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -12,13 +14,18 @@ namespace XyGraph
 
     public class Graph : Canvas
     {
+        public event Action GraphLoaded;
         public event Action? GraphChanged;
-        public double WorldSize { get; set; } = 10000.0;
+
+        public double worldSize = 10000.0;
         private enum GraphState { None, Panning, DraggingNode, CreatingEdge }
 
         public Point rightClickPos;
         public List<Edge> edges { get; internal set; } = new List<Edge>();
         public List<Node> nodes { get; internal set; } = new List<Node>();
+        // graph-level input previews (also act as serialisable data containers)
+        public List<GraphInputDefinition> inputDefinitions { get; internal set; } = new List<GraphInputDefinition>();
+        public Dictionary<string, GraphInput> inputValues  = new Dictionary<string, GraphInput>();
 
         private const int GRID_SIZE = 20;
 
@@ -26,8 +33,9 @@ namespace XyGraph
         public EndNode endNode { get; internal set; }
         internal MenuItem startItem { get; private set; }
         internal MenuItem endItem { get; private set; }
+        public MenuItem createMenu { get; private set; }
 
-        public Guid guid { get; internal set; }
+        public Guid guid { get; set; }
 
         public enum GraphStatus
         {
@@ -46,17 +54,23 @@ namespace XyGraph
 
             ContextMenu = new ContextMenu();
 
-            startItem = new MenuItem { Header = "Create Start Node" };
-            startItem.Click += (object sender, RoutedEventArgs e) => AddStartNode();
-            ContextMenu.Items.Add(startItem);
+            // Create a top-level Create menu and expose it so callers can add items
+            createMenu = new MenuItem { Header = "Create" };
 
-            endItem = new MenuItem { Header = "Create End Node" };
+            startItem = new MenuItem { Header = "Start" };
+            startItem.Click += (object sender, RoutedEventArgs e) => AddStartNode();
+            createMenu.Items.Add(startItem);
+
+            endItem = new MenuItem { Header = "End" };
             endItem.Click += (object sender, RoutedEventArgs e) => AddEndNode();
-            ContextMenu.Items.Add(endItem);
+            createMenu.Items.Add(endItem);
+
+            ContextMenu.Items.Add(createMenu);
+            
         }
 
 
-        private void AddStartNode()
+        public void AddStartNode()
         {
             if (startNode == null)
             {
@@ -67,10 +81,11 @@ namespace XyGraph
                 nodes.Add(startNode);
                 startNode.NodeChanged -= OnNodeChanged;
                 startNode.NodeChanged += OnNodeChanged;
-                startItem.IsEnabled = false;
+                if (startItem != null) startItem.IsEnabled = false;
             }
         }
-        private void AddEndNode()
+
+        public void AddEndNode()
         {
             if (endNode == null)
             {
@@ -81,7 +96,7 @@ namespace XyGraph
                 nodes.Add(endNode);
                 endNode.NodeChanged -= OnNodeChanged;
                 endNode.NodeChanged += OnNodeChanged;
-                endItem.IsEnabled = false;
+                if (endItem != null) endItem.IsEnabled = false;
             }
         }
         public void AddNode(Node n, double posX = 0, double posY = 0)
@@ -120,13 +135,13 @@ namespace XyGraph
         public Edge CreateEdge(Port from, Port to)
         {
             // Check if an edge already exists between these ports (bi-directional)
-            if (edges.Any(edge => (edge.fromPort == from && edge.toPort == to) || (edge.fromPort == to && edge.toPort == from)))
+            if (edges.Any(edge => (edge.outputPort == from && edge.inputPort == to) || (edge.outputPort == to && edge.inputPort == from)))
             {
                 return null;
             }
 
             Edge conn = new Edge(this, from, to);
-            conn.UpdatePosition();
+            conn.ReDraw();
             Children.Add(conn.visual);
             edges.Add(conn);
 
@@ -160,6 +175,10 @@ namespace XyGraph
             while(nodes.Count >0)
                 nodes[0].Delete();
 
+
+            while (inputDefinitions.Count > 0)
+                inputDefinitions[0].Delete();
+
             if (startItem != null)
                 startItem.IsEnabled = true;
             if (endItem != null)
@@ -183,6 +202,24 @@ namespace XyGraph
             obj["status"] = status.ToString();
             obj["activeNode"] = activeNode != null ? activeNode.guid.ToString() : null;
 
+
+            // the definitions of inputs, the "slots" that need ot be filled
+            JsonArray inputsArray = new JsonArray();
+            foreach (GraphInputDefinition gi in inputDefinitions)
+            {
+                inputsArray.Add(gi.Save());
+            }
+            obj["inputDefinitions"] = inputsArray;
+
+            // the values of the inputs
+            JsonObject inputValuesObj = new JsonObject();
+            foreach (KeyValuePair<string, GraphInput> kvp in inputValues)
+            {
+                inputValuesObj[kvp.Key] = kvp.Value.Save();
+            }
+            obj["inputValues"] = inputValuesObj;
+
+
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
             {
@@ -197,6 +234,7 @@ namespace XyGraph
                 edgesArray.Add(e.Save());
             }
             obj["edges"] = edgesArray;
+
 
             return obj;
         }
@@ -217,8 +255,77 @@ namespace XyGraph
                 guid = System.Guid.NewGuid();
             }
 
+
+            // restore runtime status (if present)
+            string statusStr = obj["status"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(statusStr))
+            {
+                if (System.Enum.TryParse<GraphStatus>(statusStr, out GraphStatus parsedStatus))
+                {
+                    status = parsedStatus;
+                }
+            }
+
+            string activeGuidStr = obj["activeNode"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(activeGuidStr))
+            {
+                if (System.Guid.TryParse(activeGuidStr, out System.Guid activeGuid))
+                {
+                    Node found = nodes.FirstOrDefault(n => n.guid == activeGuid);
+                    if (found != null)
+                    {
+                        activeNode = found;
+                    }
+                }
+            }
             // clear existing graph
             Clear();
+
+
+            // load graph-level inputs (if present)
+            JsonArray inputsArray = obj["inputDefinitions"] as JsonArray;
+            if (inputsArray != null)
+            {
+                foreach (JsonNode? item in inputsArray)
+                {
+                    JsonObject inputObj = item as JsonObject;
+                    if (inputObj == null) throw new ArgumentException("Invalid input object in inputs array");
+                    GraphInputDefinition gi = new GraphInputDefinition(this);
+                    gi.Load(inputObj);
+                    inputDefinitions.Add(gi);
+                }
+            }
+            // restore runtime input values (if present)
+            JsonObject inputValuesObj = obj["inputValues"] as JsonObject;
+            if (inputValuesObj != null)
+            {
+                foreach (KeyValuePair<string, JsonNode> kv in inputValuesObj)
+                {
+                    try
+                    {
+                        JsonObject valObj = kv.Value as JsonObject;
+                        if (valObj == null) continue;
+
+                        GraphInput runtime = new GraphInput();
+                        // find matching definition to determine expected type
+                        GraphInputDefinition matched = inputDefinitions.FirstOrDefault(d => d.InputId.ToString() == kv.Key);
+                        Type expected = null;
+                        if (matched != null)
+                        {
+                            JsonObject defObj = matched.Save();
+                            string typeName = defObj["type"]?.GetValue<string>() ?? string.Empty;
+                            if (!string.IsNullOrEmpty(typeName))
+                            {
+                                try { expected = Type.GetType(typeName, false, true); } catch { expected = null; }
+                            }
+                        }
+
+                        runtime.Load(valObj, expected);
+                        inputValues[kv.Key] = runtime;
+                    }
+                    catch { }
+                }
+            }
 
             JsonArray nodesArray = obj["nodes"] as JsonArray;
             if (nodesArray != null)
@@ -250,28 +357,7 @@ namespace XyGraph
                 }
             }
 
-            // restore runtime status (if present)
-            string statusStr = obj["status"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(statusStr))
-            {
-                if (System.Enum.TryParse<GraphStatus>(statusStr, out GraphStatus parsedStatus))
-                {
-                    status = parsedStatus;
-                }
-            }
 
-            string activeGuidStr = obj["activeNode"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(activeGuidStr))
-            {
-                if (System.Guid.TryParse(activeGuidStr, out System.Guid activeGuid))
-                {
-                    Node found = nodes.FirstOrDefault(n => n.guid == activeGuid);
-                    if (found != null)
-                    {
-                        activeNode = found;
-                    }
-                }
-            }
 
             // Set start and end nodes after loading
             startNode = nodes.FirstOrDefault(n => n is StartNode) as StartNode;
@@ -280,8 +366,43 @@ namespace XyGraph
             endNode = nodes.FirstOrDefault(n => n is EndNode) as EndNode;
             if (endNode != null) endItem.IsEnabled = false;
 
+            // notify listeners that the graph has finished loading
+            GraphLoaded?.Invoke();
+
             return this;
         }
+
+
+        public void ProvideInput(string name, object value)
+        {
+            if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Input name required", nameof(name));
+
+            // try to find a matching definition by name (case-insensitive)
+            GraphInputDefinition matchingDefinition = null;
+            foreach (GraphInputDefinition def in inputDefinitions)
+            {
+                JsonObject defObj = def.Save();
+                string defName = defObj["name"]?.GetValue<string>() ?? string.Empty;
+                if (string.Equals(defName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchingDefinition = def;
+                    break;
+                }
+            }
+            if(matchingDefinition == null) throw new ArgumentException($"No matching input definition found for name '{name}'", nameof(name));
+
+
+            GraphInput runtimeInput = new GraphInput();
+            runtimeInput.name = matchingDefinition.Name;
+            runtimeInput.ID = matchingDefinition.InputId;
+            runtimeInput.Value = value;
+
+            string key = runtimeInput.ID.ToString();
+            runtimeInput.ID = matchingDefinition.InputId;
+
+            inputValues[key] = runtimeInput;
+        }
+
 
         // will return an instance of the type, casted to a Node
         private Node CreateNodeByType(string typeName)
@@ -298,7 +419,7 @@ namespace XyGraph
 
             if (matched != null)
             {
-                var ctor = matched.GetConstructor(new System.Type[] { typeof(Graph) });
+                ConstructorInfo? ctor = matched.GetConstructor(new System.Type[] { typeof(Graph) });
                 if (ctor != null)
                 {
                     return (Node)ctor.Invoke(new object[] { this });
@@ -340,10 +461,10 @@ namespace XyGraph
             if (baseType == null)
                 throw new ArgumentNullException(nameof(baseType));
 
-            var result = new List<Type>();
+            List<Type> result = new List<Type>();
 
             // Look through all loaded assemblies
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly? assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type[] types;
 
@@ -356,7 +477,7 @@ namespace XyGraph
                     types = e.Types.Where(t => t != null).ToArray();
                 }
 
-                foreach (var t in types)
+                foreach (Type? t in types)
                 {
                     if (t == null)
                         continue;
@@ -397,9 +518,35 @@ namespace XyGraph
         public void Run()
         {
             if (startNode == null) return;
+            InputValidation();
+            // clear transient runtime state on ports so each run starts fresh
+            ClearRuntimeCache();
             activeNode = startNode;
             status = GraphStatus.Running;
             startNode.Run();
+        }
+
+        private bool InputValidation()
+        {
+            foreach (GraphInputDefinition definition in inputDefinitions)
+            {
+                string key = definition.InputId.ToString();
+                if (!inputValues.ContainsKey(key))
+                {
+                    JsonObject defObj = definition.Save();
+                    string inputName = defObj["name"]?.GetValue<string>() ?? "Unnamed Input";
+                    throw new InvalidOperationException($"Missing required input: '{inputName}'. All graph inputs must be provided before running.");
+                }
+            }
+            return true;
+        }
+
+        private void ClearRuntimeCache()
+        {
+            foreach (Node node in nodes)
+            {
+                try { node.ClearRuntimeCache(); } catch { }
+            }
         }
     }
 }
