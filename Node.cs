@@ -997,6 +997,11 @@ namespace XyGraph
             graph.OnError(this);
         }
 
+        public virtual void Update()
+        {
+            // write your custom logic here that decides if this node is completed or not.
+        }
+
 
         public List<string> GetOutputs()
         {

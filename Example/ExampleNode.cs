@@ -74,6 +74,15 @@ namespace XyGraph
             base.Run();
             // === Your custom runtime behaviour here ===
         }
+
+        public override void Update()
+        {
+            base.Update();
+            // === your custom checks to see if this task is completed here ===
+
+            // if (someCondition == true)
+            //     Completed();
+        }
         public override void Completed()
         {
             base.Completed();

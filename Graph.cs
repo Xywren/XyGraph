@@ -45,7 +45,11 @@ namespace XyGraph
             Error
         }
         public GraphStatus status { get; internal set; } = GraphStatus.Idle;
-        public Node activeNode { get; internal set; }
+
+        public List<Node> GetActiveNodes()
+        {
+            return nodes.Where(n => n.state == Node.NodeState.Running).ToList();
+        }
 
         public Graph()
         {
@@ -198,9 +202,8 @@ namespace XyGraph
 
             // include graph GUID in the saved data
             obj["guid"] = guid.ToString();
-            // persist runtime graph status and active node (if any)
+            // persist runtime graph status
             obj["status"] = status.ToString();
-            obj["activeNode"] = activeNode != null ? activeNode.guid.ToString() : null;
 
 
             // the definitions of inputs, the "slots" that need ot be filled
@@ -266,18 +269,6 @@ namespace XyGraph
                 }
             }
 
-            string activeGuidStr = obj["activeNode"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(activeGuidStr))
-            {
-                if (System.Guid.TryParse(activeGuidStr, out System.Guid activeGuid))
-                {
-                    Node found = nodes.FirstOrDefault(n => n.guid == activeGuid);
-                    if (found != null)
-                    {
-                        activeNode = found;
-                    }
-                }
-            }
             // clear existing graph
             Clear();
 
@@ -505,12 +496,10 @@ namespace XyGraph
 
         public void Finished()
         {
-            activeNode = null;
             status = GraphStatus.Completed;
         }
         public void OnError(Node node)
         {
-            activeNode = null;
             status = GraphStatus.Error;
         }
 
@@ -521,7 +510,6 @@ namespace XyGraph
             InputValidation();
             // clear transient runtime state on ports so each run starts fresh
             ClearRuntimeCache();
-            activeNode = startNode;
             status = GraphStatus.Running;
             startNode.Run();
         }
