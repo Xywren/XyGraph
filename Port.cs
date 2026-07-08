@@ -96,7 +96,7 @@ namespace XyGraph
         // non-serialised elements
         public UIElement label;
         public TextBlock typeLabel;
-        internal NodeContainer parentContainer;
+        public NodeContainer parentContainer;
 
         public MemberInfo ownerMember; // magic code that lets us set Inputs and Outputs on subclasses of Node
         public int ownerIndex = -1; // optional owner metadata for multi-output grouping
@@ -307,20 +307,27 @@ namespace XyGraph
             }
         }
 
+        // Fired whenever edges are added or removed on this port.
+        public Action OnEdgesChanged;
+
         internal void ConnectionMade(Edge connection)
         {
             if (connection == null) return;
 
-            // If this port only supports a single connection, remove existing edges first
             if (connectionType == ConnectionType.Single)
             {
                 foreach (Edge e in edges.ToList())
-                {
                     e.Delete();
-                }
             }
 
             edges.Add(connection);
+            OnEdgesChanged?.Invoke();
+        }
+
+        internal void ConnectionRemoved(Edge connection)
+        {
+            edges.Remove(connection);
+            OnEdgesChanged?.Invoke();
         }
     }
 }

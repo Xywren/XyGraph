@@ -57,6 +57,35 @@ namespace XyGraph
             }
         }
 
+        // Adds a port with an extra UIElement alongside it in a horizontal row.
+        public void AddWithSideContent(Port port, UIElement sideContent)
+        {
+            StackPanel row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(port);
+            row.Children.Add(sideContent);
+            stackPanel.Children.Add(row);
+            Visibility = Visibility.Visible;
+            node.ports.Add(port);
+            port.parentContainer = this;
+        }
+
+        // Finds an already-registered port in the stack, removes its visual row,
+        // and re-inserts it wrapped in a horizontal row with side content.
+        public void WrapPortWithSideContent(Port port, UIElement sideContent)
+        {
+            // find the existing visual entry for this port
+            int index = stackPanel.Children.IndexOf(port);
+            if (index < 0) return;
+
+            stackPanel.Children.RemoveAt(index);
+
+            StackPanel row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(port);
+            row.Children.Add(sideContent);
+            stackPanel.Children.Insert(index, row);
+            // port stays in node.ports and parentContainer unchanged
+        }
+
         public int IndexOf(UIElement child)
         {
             return stackPanel.Children.IndexOf(child);

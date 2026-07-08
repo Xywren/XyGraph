@@ -143,9 +143,11 @@ namespace XyGraph
 
         public void Delete()
         {
-            // unbind port-backed members before removing edge
             TryUnbindPortFromPeer(outputPort, inputPort.parentContainer?.node);
             TryUnbindPortFromPeer(inputPort, outputPort.parentContainer?.node);
+
+            outputPort?.ConnectionRemoved(this);
+            inputPort?.ConnectionRemoved(this);
 
             graph.Children.Remove(visual);
             graph.edges.Remove(this);

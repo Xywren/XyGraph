@@ -6,11 +6,25 @@ using System.Windows.Media;
 
 namespace XyGraph
 {
+    public static class GraphColours
+    {
+        // Set to intercept colour lookup. Return null to fall through to the hash.
+        public static Func<string, string> ColourOverride
+        {
+            get => Common.ColourOverride;
+            set => Common.ColourOverride = value;
+        }
+    }
+
     internal class Common
     {
+        internal static Func<string, string> ColourOverride;
+
         // Return a hex colour string derived from the input (e.g. "#RRGGBB")
         public static string HashColour(string input)
         {
+            string overridden = ColourOverride?.Invoke(input);
+            if (overridden != null) return overridden;
             if (input == null) input = string.Empty;
 
             byte[] inputBytes = Encoding.UTF8.GetBytes(input);
