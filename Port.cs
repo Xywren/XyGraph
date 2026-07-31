@@ -194,6 +194,11 @@ namespace XyGraph
 
             Child = grid;
 
+            ContextMenu = new ContextMenu();
+            MenuItem disconnectItem = new MenuItem { Header = "Disconnect All" };
+            disconnectItem.Click += (object s, RoutedEventArgs e) => DisconnectAll();
+            ContextMenu.Items.Add(disconnectItem);
+
             // apply initial colour if provided
             if (color != null)
             {
@@ -245,6 +250,21 @@ namespace XyGraph
         }
 
         // Load a port from its saved JSON representation. The caller will add the returned Port into the appropriate container.
+        // Two ports may connect when the value produced by the output satisfies the
+        // input's declared type. An input declared as object therefore accepts anything,
+        // which is what lets generic nodes exist.
+        public static bool CanConnect(Port from, Port to)
+        {
+            if (from == null || to == null) return false;
+            if (from.direction == to.direction) return false;
+            if (from.portType == null || to.portType == null) return false;
+
+            Port output = from.direction == PortDirection.Output ? from : to;
+            Port input = from.direction == PortDirection.Input ? from : to;
+
+            return input.portType.IsAssignableFrom(output.portType);
+        }
+
         public static Port Load(JsonObject obj, Node node)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
@@ -295,12 +315,18 @@ namespace XyGraph
         // =======================================================================
         //                            Edit-Time functions
         // =======================================================================
-        public void Delete()
+        public void DisconnectAll()
         {
             foreach (Edge edge in edges.ToList())
             {
                 edge.Delete();
             }
+        }
+
+        public void Delete()
+        {
+            DisconnectAll();
+
             if (parentContainer != null)
             {
                 parentContainer.Remove(this);

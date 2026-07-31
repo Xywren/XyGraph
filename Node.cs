@@ -149,6 +149,16 @@ namespace XyGraph
         }
 
 
+        // Control-flow ports carry Node references. They are always black so the
+        // execution path reads distinctly from typed data connections.
+        internal static string DerivePortColour(Type portType)
+        {
+            if (portType != null && typeof(Node).IsAssignableFrom(portType))
+                return "Black";
+
+            return Common.HashColour(portType?.ToString() ?? "object");
+        }
+
         protected void InitializePortsFromAttributes()
         {
             Type t = this.GetType();
@@ -227,7 +237,7 @@ namespace XyGraph
             foreach (var entry in items)
             {
                 // if the attribute did not provide a color, derive one from the member type
-                string derivedColor = Common.HashColour(entry.memberType?.ToString() ?? "object");
+                string derivedColor = DerivePortColour(entry.memberType);
                 string finalColor = entry.color ?? derivedColor;
                 Brush colorBrush = (Brush)brushConverter.ConvertFromString(finalColor);
 
@@ -313,7 +323,7 @@ namespace XyGraph
                     }
 
                     // create the MultiPort UI from metadata
-                    string derivedColor = Common.HashColour(elementType?.ToString() ?? "object");
+                    string derivedColor = DerivePortColour(elementType);
                     string finalColor = multiAttr.Color ?? derivedColor;
                     Brush colorBrush = (Brush)brushConverter.ConvertFromString(finalColor);
                     MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: colorBrush, drawSocketOuterRing: multiAttr.DrawOuterRing);
@@ -350,7 +360,7 @@ namespace XyGraph
                             }
 
                             // create a MultiPort for each existing list slot and insert after the add button
-                            string derivedColorExisting = Common.HashColour(elementType?.ToString() ?? "object");
+                            string derivedColorExisting = DerivePortColour(elementType);
                             string finalColorExisting = multiAttr.Color ?? derivedColorExisting;
                             Brush existingColorBrush = (Brush)brushConverter.ConvertFromString(finalColorExisting);
                             MultiPort mp = new MultiPort("New Output", PortDirection.Output, elementType, socketSize: multiAttr.SocketSize, color: existingColorBrush, drawSocketOuterRing: multiAttr.DrawOuterRing);
@@ -637,7 +647,7 @@ namespace XyGraph
                             NodeMultiOutputAttribute multiAttr = fi.GetCustomAttribute<NodeMultiOutputAttribute>();
                             int socketSize = multiAttr?.SocketSize ?? 10;
                             // derive a color for multi-ports if not specified on the attribute
-                            string derived = Common.HashColour(elemTypeForPort?.ToString() ?? "object");
+                            string derived = DerivePortColour(elemTypeForPort);
                             BrushConverter localBrushConverter = new BrushConverter();
                             Brush colorBrush = (Brush)localBrushConverter.ConvertFromString(multiAttr?.Color ?? derived);
                             bool drawOuter = multiAttr?.DrawOuterRing ?? true;
@@ -711,7 +721,7 @@ namespace XyGraph
                             NodeMultiOutputAttribute multiAttr = pi.GetCustomAttribute<NodeMultiOutputAttribute>();
                             int socketSize = multiAttr?.SocketSize ?? 10;
                             // derive a color for multi-ports if not specified on the attribute (match field-backed behavior)
-                            string derivedProp = Common.HashColour(elemTypeForPort?.ToString() ?? "object");
+                            string derivedProp = DerivePortColour(elemTypeForPort);
                             string finalPropColor = multiAttr?.Color ?? derivedProp;
                             Brush colorBrush;
                             try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(finalPropColor)); } catch { colorBrush = Brushes.Black; }
@@ -853,6 +863,19 @@ namespace XyGraph
                     }
                     catch { }
                 }
+            }
+
+            // Ports created at runtime (multi-ports, dynamically added pairs) have no owning
+            // member, so the loop above cannot reach them. Resolve them onto the port itself
+            // so nodes that add their own ports can read their values.
+            foreach (Port port in ports)
+            {
+                if (port.direction != PortDirection.Input) continue;
+                if (port.ownerMember != null) continue;
+                if (port.hasRuntimeValue) continue;
+
+                port.runtimeValue = ResolvePortValue(port);
+                port.hasRuntimeValue = true;
             }
         }
 

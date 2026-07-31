@@ -686,7 +686,7 @@ namespace XyGraph
                             {
                                 // Only consider ports that are opposite direction, not the start port, and have the same CLR type
                                 if (p != edgeStartPort && p.direction != edgeStartPort.direction &&
-                                    p.portType != null && edgeStartPort.portType != null && p.portType == edgeStartPort.portType)
+                                    Port.CanConnect(edgeStartPort, p))
                                 {
                                     int endOffset = (int)p.socket.ActualWidth / 2;
                                     Point portPos = p.socket.TranslatePoint(new Point(endOffset, endOffset), graph);
@@ -717,7 +717,7 @@ namespace XyGraph
                         if (targetPort != null)
                         {
                             // Only create the edge if the two ports have the same CLR type
-                            if (edgeStartPort != null && edgeStartPort.portType != null && targetPort.portType != null && edgeStartPort.portType == targetPort.portType)
+                            if (Port.CanConnect(edgeStartPort, targetPort))
                             {
                                 graph.CreateEdge(edgeStartPort, targetPort);
                             }

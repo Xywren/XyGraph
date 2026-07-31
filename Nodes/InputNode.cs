@@ -47,7 +47,7 @@ namespace XyGraph
 
             // create a single output port for this input node
             Type resolvedType = portType ?? typeof(object);
-            string hex = Common.HashColour(resolvedType.ToString());
+            string hex = DerivePortColour(resolvedType);
             BrushConverter conv = new BrushConverter();
             Brush colorBrush = (Brush)conv.ConvertFromString(hex);
             Port p = new Port(name, PortDirection.Output, resolvedType, socketSize: 10, color: colorBrush, drawSocketOuterRing: true);
@@ -103,7 +103,7 @@ namespace XyGraph
                 }
 
                 // update socket colour
-                string hex = Common.HashColour((outputPort.portType ?? typeof(object)).ToString());
+                string hex = DerivePortColour(outputPort.portType ?? typeof(object));
                 BrushConverter conv = new BrushConverter();
                 Brush colorBrush = (Brush)conv.ConvertFromString(hex);
                 outputPort.colour = colorBrush;
