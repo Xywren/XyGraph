@@ -1014,6 +1014,10 @@ namespace XyGraph
         {
             state = NodeState.Completed;
         }
+        protected void SetIdle()
+        {
+            state = NodeState.Idle;
+        }
         public virtual void Error()
         {
             state = NodeState.Error;
