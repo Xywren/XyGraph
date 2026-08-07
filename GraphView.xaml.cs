@@ -23,7 +23,7 @@ namespace XyGraph
 
         private bool sidebarSlidOff = false;
         private System.Windows.Media.Animation.DoubleAnimation slideAnimation;
-        private const double WORLD_SIZE = 10000;
+        private const double WORLD_SIZE = 100000;
         private const int VISUAL_TREE_SEARCH_DEPTH = 10;
         private const string INPUT_PREVIEW_DRAG_FORMAT = "XyGraph.GraphInput";
         private Point previewDragStart;
@@ -75,11 +75,15 @@ namespace XyGraph
             this.MouseMove += GraphView_MouseMove;
             this.MouseLeftButtonUp += GraphView_MouseLeftButtonUp;
             this.MouseRightButtonDown += GraphView_MouseRightButtonDown;
+            this.MouseRightButtonUp += GraphView_MouseRightButtonUp;
+            graph.ContextMenuOpening += Graph_ContextMenuOpening;
 
             // sidebar toggle button
             ToggleSidebarButton.Click += ToggleSidebarButton_Click;
             // add input button
             AddInputButton.Click += AddInputButton_Click;
+            // add variable button
+            AddVariableButton.Click += AddVariableButton_Click;
             // centralized drag handlers for InputsList items (covers loaded and new previews)
             InputsList.PreviewMouseLeftButtonDown += InputsList_PreviewMouseLeftButtonDown;
             InputsList.PreviewMouseMove += InputsList_PreviewMouseMove;
@@ -218,10 +222,14 @@ namespace XyGraph
                 previewDragOverGraph = true;
                 if (previewAdorner != null)
                 {
-                    // position the adorner at the current mouse position relative to rootGrid
                     Point p = e.GetPosition(this.rootGrid);
                     previewAdorner.SetOffset(p);
                 }
+            }
+            else if (e.Data != null && (e.Data.GetDataPresent(GraphVariableCard.GET_DRAG_FORMAT) || e.Data.GetDataPresent(GraphVariableCard.SET_DRAG_FORMAT)))
+            {
+                e.Effects = DragDropEffects.Copy;
+                previewDragOverGraph = true;
             }
             else
             {
@@ -238,6 +246,24 @@ namespace XyGraph
 
         private void Graph_Drop(object sender, DragEventArgs e)
         {
+            if (e.Data != null && e.Data.GetDataPresent(GraphVariableCard.GET_DRAG_FORMAT))
+            {
+                GraphVariableCard card = e.Data.GetData(GraphVariableCard.GET_DRAG_FORMAT) as GraphVariableCard;
+                if (card != null && previewDragOverGraph)
+                    PlaceGetNode(card, e.GetPosition(graph));
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Data != null && e.Data.GetDataPresent(GraphVariableCard.SET_DRAG_FORMAT))
+            {
+                GraphVariableCard card = e.Data.GetData(GraphVariableCard.SET_DRAG_FORMAT) as GraphVariableCard;
+                if (card != null && previewDragOverGraph)
+                    PlaceSetNode(card, e.GetPosition(graph));
+                e.Handled = true;
+                return;
+            }
+
             if (e.Data == null || !e.Data.GetDataPresent(INPUT_PREVIEW_DRAG_FORMAT)) return;
 
             GraphInputDefinition preview = e.Data.GetData(INPUT_PREVIEW_DRAG_FORMAT) as GraphInputDefinition;
@@ -443,16 +469,16 @@ namespace XyGraph
             translateTransform.X += viewportCenterX - mapped.X;
             translateTransform.Y += viewportCenterY - mapped.Y;
             UpdateSidebarLayout();
-            // initial population of inputs list from graph
             PopulateInputsListFromGraph();
+            PopulateVariablesListFromGraph();
         }
 
         //not to be confused with GraphViewLoaded
         // this is called whenever a saved graph is loaded in the graph, not when the graph view is loaded up
         private void OnGraphLoaded()
         {
-            // repopulate input previews when a new graph is loaded
             PopulateInputsListFromGraph();
+            PopulateVariablesListFromGraph();
         }
 
         private void PopulateInputsListFromGraph()
@@ -465,6 +491,75 @@ namespace XyGraph
                 gi.GraphInputChanged += OnGraphInputChanged;
                 InputsList.Items.Add(gi);
             }
+        }
+
+        // =======================================================================
+        //                            Variable sidebar
+        // =======================================================================
+
+        private void AddVariableButton_Click(object sender, RoutedEventArgs e)
+        {
+            GraphVariable v = new GraphVariable { Name = "variable" };
+            graph.variableDefinitions.Add(v);
+            AddVariableCard(v);
+        }
+
+        private GraphVariableCard AddVariableCard(GraphVariable v)
+        {
+            // the card edits the definition in place — copying it would strip the loaded type
+            GraphVariableCard card = new GraphVariableCard(graph, v);
+            card.AvailableInputTypes = new List<Type>(availableInputTypes);
+            card.Width = SidebarContent.Width - 16.0;
+
+            card.GraphVariableChanged += OnGraphVariableChanged;
+            card.PlaceGetNodeRequested += () => PlaceGetNode(card, GetViewportCenterCanvas());
+            card.PlaceSetNodeRequested += () => PlaceSetNode(card, GetViewportCenterCanvas());
+
+            VariablesList.Items.Add(card);
+            return card;
+        }
+
+        private void PopulateVariablesListFromGraph()
+        {
+            VariablesList.Items.Clear();
+            foreach (GraphVariable v in graph.variableDefinitions)
+                AddVariableCard(v);
+        }
+
+        private void OnGraphVariableChanged(GraphVariableCard card)
+        {
+            if (card == null) return;
+            Guid id   = card.Variable.Id;
+            string name = card.Variable.Name;
+            Type type   = card.ResolvedType;
+
+            // sync back into the definition list
+            GraphVariable def = graph.variableDefinitions.FirstOrDefault(v => v.Id == id);
+            if (def != null) { def.Name = name; def.ResolvedType = type; }
+
+            foreach (Node n in graph.nodes)
+            {
+                if (n is GetVariableNode g && g.variableId == id) g.HandleGraphVariableChanged(name, type);
+                if (n is SetVariableNode s && s.variableId == id) s.Initialize(id, name, type);
+            }
+        }
+
+        private void PlaceGetNode(GraphVariableCard card, Point canvasPoint)
+        {
+            GetVariableNode node = new GetVariableNode(graph, card.Variable.Id, card.Variable.Name, card.ResolvedType);
+            AddNode(node, canvasPoint.X - 60, canvasPoint.Y - 20);
+        }
+
+        private void PlaceSetNode(GraphVariableCard card, Point canvasPoint)
+        {
+            SetVariableNode node = new SetVariableNode(graph, card.Variable.Id, card.Variable.Name, card.ResolvedType);
+            AddNode(node, canvasPoint.X - 60, canvasPoint.Y - 30);
+        }
+
+        private Point GetViewportCenterCanvas()
+        {
+            Point viewportCenter = new Point(ActualWidth / 2.0, ActualHeight / 2.0);
+            return ViewportToCanvas(viewportCenter);
         }
 
         public void AddNode(Node n, double posX = 0, double posY = 0)
@@ -535,12 +630,18 @@ namespace XyGraph
         //                     Mouse state & handlers
         // =======================================================================
 
-        private enum MouseState { None, CreatingEdge, DraggingNode, Panning }
+        private enum MouseState { None, CreatingEdge, DraggingNode, Panning, BoxSelecting }
         private MouseState mouseState = MouseState.None;
+
+        private Point boxSelectStart;
+        private Rectangle selectionBox = null;
+        private bool suppressNextContextMenu = false;
+        private readonly Dictionary<Node, Point> dragGroupRawPositions = new Dictionary<Node, Point>();
 
         private Point lastMousePos;
         private UIElement draggedNode = null;
         private Point dragStartContent;
+        private Point draggedNodeRawPos;  // unsnapped canvas position during drag
         private Port edgeStartPort = null;
         private Line tempConnectionLine = null;
         private Port targetPort = null;
@@ -602,12 +703,22 @@ namespace XyGraph
 
             // look for a Node
             UIElement nodeElement = graph.GetNodeFromSource(e.OriginalSource);
+            if (nodeElement is NodeGroup) nodeElement = null;   // groups run their own drag from the title bar
             if (nodeElement != null)
             {
+                bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+
+                if (nodeElement is Node clickedNode)
+                {
+                    if (ctrlHeld) graph.ToggleNodeSelection(clickedNode);
+                    else if (!graph.selectedNodes.Contains(clickedNode)) graph.SelectNode(clickedNode, additive: false);
+                }
+
                 mouseState = MouseState.DraggingNode;
                 draggedNode = nodeElement;
-                // record drag start in content (canvas) coordinates
                 dragStartContent = ViewportToWorld(e.GetPosition(this));
+                draggedNodeRawPos = new Point(Canvas.GetLeft(nodeElement), Canvas.GetTop(nodeElement));
+                CaptureDragGroup(nodeElement);
                 CaptureMouse();
                 e.Handled = true;
                 return;
@@ -616,6 +727,8 @@ namespace XyGraph
             // otherwise if we actually clicked the graph background start panning
             if (e.OriginalSource == graph || e.Source == graph)
             {
+                EdgeHandleSelection.ClearAll();
+                graph.ClearSelection();
                 mouseState = MouseState.Panning;
                 lastMousePos = e.GetPosition(Window.GetWindow(this));
                 CaptureMouse();
@@ -641,16 +754,24 @@ namespace XyGraph
                         if (draggedNode == null) break;
                         Point contentPos = ViewportToWorld(e.GetPosition(this));
                         Vector delta = contentPos - dragStartContent;
-                        double currentLeft = Canvas.GetLeft(draggedNode);
-                        double currentTop = Canvas.GetTop(draggedNode);
-                        Canvas.SetLeft(draggedNode, currentLeft + delta.X);
-                        Canvas.SetTop(draggedNode, currentTop + delta.Y);
                         dragStartContent = contentPos;
-                        if (draggedNode is Node n)
+
+                        draggedNodeRawPos = new Point(draggedNodeRawPos.X + delta.X, draggedNodeRawPos.Y + delta.Y);
+                        MoveToSnapped(draggedNode, draggedNodeRawPos);
+                        (draggedNode as Node)?.RedrawEdges();
+
+                        foreach (Node other in dragGroupRawPositions.Keys.ToList())
                         {
-                            n.RedrawEdges();
+                            Point raw = dragGroupRawPositions[other];
+                            raw = new Point(raw.X + delta.X, raw.Y + delta.Y);
+                            dragGroupRawPositions[other] = raw;
+                            MoveToSnapped(other, raw);
+                            other.RedrawEdges();
                         }
                     }
+                    break;
+                case MouseState.BoxSelecting:
+                    UpdateSelectionBox(ViewportToCanvas(e.GetPosition(this)));
                     break;
                 case MouseState.CreatingEdge:
                     {
@@ -736,11 +857,10 @@ namespace XyGraph
                 case MouseState.DraggingNode:
                     {
 
-                        if (draggedNode is Node n)
-                        {
-                            n.OnNodeMoved();
-                        }
+                        (draggedNode as Node)?.OnNodeMoved();
+                        foreach (Node other in dragGroupRawPositions.Keys) other.OnNodeMoved();
 
+                        dragGroupRawPositions.Clear();
                         draggedNode = null;
                         ReleaseMouseCapture();
                         mouseState = MouseState.None;
@@ -764,6 +884,95 @@ namespace XyGraph
             Matrix inv = m; inv.Invert();
             Point contentPoint = inv.Transform(e.GetPosition(this));
             graph.rightClickPos = contentPoint;
+
+            if (mouseState != MouseState.None) return;
+            if (e.OriginalSource != graph && e.Source != graph) return;
+
+            mouseState      = MouseState.BoxSelecting;
+            boxSelectStart  = ViewportToCanvas(e.GetPosition(this));
+
+            selectionBox = new Rectangle
+            {
+                Stroke           = Brushes.DodgerBlue,
+                StrokeThickness  = 1,
+                StrokeDashArray  = new DoubleCollection { 3, 2 },
+                Fill             = new SolidColorBrush(Color.FromArgb(40, 30, 144, 255)),
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(selectionBox, boxSelectStart.X);
+            Canvas.SetTop(selectionBox, boxSelectStart.Y);
+            graph.Children.Add(selectionBox);
+            CaptureMouse();
+        }
+
+        private void GraphView_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (mouseState != MouseState.BoxSelecting) return;
+
+            Rect area = CurrentSelectionRect(ViewportToCanvas(e.GetPosition(this)));
+
+            graph.Children.Remove(selectionBox);
+            selectionBox = null;
+            ReleaseMouseCapture();
+            mouseState = MouseState.None;
+
+            // a click-sized box is a plain right-click; leave it to the context menu
+            const double CLICK_TOLERANCE = 4.0;
+            if (area.Width < CLICK_TOLERANCE && area.Height < CLICK_TOLERANCE) return;
+
+            graph.SelectNodesInRect(area, additive: (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
+            suppressNextContextMenu = true;
+        }
+
+        private void Graph_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            if (!suppressNextContextMenu) return;
+            suppressNextContextMenu = false;
+            e.Handled = true;
+        }
+
+        private Rect CurrentSelectionRect(Point current)
+        {
+            return new Rect(
+                Math.Min(boxSelectStart.X, current.X),
+                Math.Min(boxSelectStart.Y, current.Y),
+                Math.Abs(current.X - boxSelectStart.X),
+                Math.Abs(current.Y - boxSelectStart.Y));
+        }
+
+        private void UpdateSelectionBox(Point current)
+        {
+            if (selectionBox == null) return;
+
+            Rect area = CurrentSelectionRect(current);
+            Canvas.SetLeft(selectionBox, area.X);
+            Canvas.SetTop(selectionBox, area.Y);
+            selectionBox.Width  = area.Width;
+            selectionBox.Height = area.Height;
+        }
+
+        private static void MoveToSnapped(UIElement element, Point rawPosition)
+        {
+            const double NODE_GRID = 10.0;
+            Canvas.SetLeft(element, Math.Round(rawPosition.X / NODE_GRID) * NODE_GRID);
+            Canvas.SetTop(element,  Math.Round(rawPosition.Y / NODE_GRID) * NODE_GRID);
+        }
+
+        /// <summary>Records the start positions of every other selected node so a drag moves them together.</summary>
+        private void CaptureDragGroup(UIElement primary)
+        {
+            dragGroupRawPositions.Clear();
+            if (primary is not Node primaryNode || !graph.selectedNodes.Contains(primaryNode)) return;
+
+            foreach (Node n in graph.selectedNodes)
+            {
+                if (n == primaryNode) continue;
+                double left = Canvas.GetLeft(n);
+                double top  = Canvas.GetTop(n);
+                if (double.IsNaN(left)) left = 0;
+                if (double.IsNaN(top))  top  = 0;
+                dragGroupRawPositions[n] = new Point(left, top);
+            }
         }
     }
 }

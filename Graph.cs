@@ -23,14 +23,24 @@ namespace XyGraph
         public Point rightClickPos;
         public List<Edge> edges { get; internal set; } = new List<Edge>();
         public List<Node> nodes { get; internal set; } = new List<Node>();
+        public List<NodeGroup> groups { get; internal set; } = new List<NodeGroup>();
+
+        // groups are drawn behind nodes so they read as a backdrop
+        private const int GROUP_Z_INDEX = -1;
         // graph-level input previews (also act as serialisable data containers)
         public List<GraphInputDefinition> inputDefinitions { get; internal set; } = new List<GraphInputDefinition>();
         public Dictionary<string, GraphInput> inputValues  = new Dictionary<string, GraphInput>();
 
+        // Graph-scoped variables: definitions are saved with the graph; values are runtime-only.
+        public List<GraphVariable> variableDefinitions { get; internal set; } = new List<GraphVariable>();
+        public Dictionary<Guid, object> variableValues = new Dictionary<Guid, object>();
+
         private const int GRID_SIZE = 20;
 
         public StartNode startNode { get; internal set; }
+        // The first end node, kept for callers that only ever expect one.
         public EndNode endNode { get; internal set; }
+        public List<EndNode> endNodes { get; } = new List<EndNode>();
         internal MenuItem startItem { get; private set; }
         internal MenuItem endItem { get; private set; }
         public MenuItem createMenu { get; private set; }
@@ -69,6 +79,18 @@ namespace XyGraph
             endItem.Click += (object sender, RoutedEventArgs e) => AddEndNode();
             createMenu.Items.Add(endItem);
 
+            MenuItem branchItem = new MenuItem { Header = "Branch" };
+            branchItem.Click += (object sender, RoutedEventArgs e) => AddNode(new BranchNode(this), rightClickPos.X, rightClickPos.Y);
+            createMenu.Items.Add(branchItem);
+
+            MenuItem commentItem = new MenuItem { Header = "Comment" };
+            commentItem.Click += (object sender, RoutedEventArgs e) => AddCommentNode();
+            createMenu.Items.Add(commentItem);
+
+            MenuItem groupItem = new MenuItem { Header = "Group" };
+            groupItem.Click += (object sender, RoutedEventArgs e) => AddNodeGroup();
+            createMenu.Items.Add(groupItem);
+
             ContextMenu.Items.Add(createMenu);
             
         }
@@ -89,20 +111,112 @@ namespace XyGraph
             }
         }
 
-        public void AddEndNode()
+        /// <summary>
+        /// Adds an end node. A graph may have several — terminating a branch where it
+        /// finishes keeps the wiring local instead of dragging every branch across the
+        /// canvas to one shared terminator.
+        /// </summary>
+        public EndNode AddEndNode()
         {
-            if (endNode == null)
-            {
-                endNode = new EndNode(this);
-                Canvas.SetLeft(endNode, rightClickPos.X - EndNode.OffsetX);
-                Canvas.SetTop(endNode, rightClickPos.Y - EndNode.OffsetY);
-                Children.Add(endNode);
-                nodes.Add(endNode);
-                endNode.NodeChanged -= OnNodeChanged;
-                endNode.NodeChanged += OnNodeChanged;
-                if (endItem != null) endItem.IsEnabled = false;
-            }
+            EndNode node = new EndNode(this);
+            Canvas.SetLeft(node, rightClickPos.X - EndNode.OffsetX);
+            Canvas.SetTop(node, rightClickPos.Y - EndNode.OffsetY);
+            Children.Add(node);
+            nodes.Add(node);
+            node.NodeChanged -= OnNodeChanged;
+            node.NodeChanged += OnNodeChanged;
+
+            endNodes.Add(node);
+            // endNode stays pointed at the first one so existing callers keep working
+            if (endNode == null) endNode = node;
+
+            return node;
         }
+        public void AddCommentNode()
+        {
+            AddNode(new CommentNode(this), rightClickPos.X, rightClickPos.Y);
+        }
+
+        /// <summary>
+        /// Creates a group around the current selection, or an empty group at the right-click
+        /// position when nothing is selected.
+        /// </summary>
+        public void AddNodeGroup()
+        {
+            NodeGroup group = new NodeGroup(this);
+
+            if (selectedNodes.Count > 0) group.EncloseNodes(selectedNodes);
+            else                        group.PlaceAt(rightClickPos);
+
+            groups.Add(group);
+            Children.Add(group);
+            SetZIndex(group, GROUP_Z_INDEX);
+        }
+
+        public void DeleteGroup(NodeGroup group)
+        {
+            if (group == null) return;
+            groups.Remove(group);
+            Children.Remove(group);
+            GraphChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Copies a group and the nodes inside it. Only edges with both ends inside the
+        /// group are reproduced — connections leaving the group are dropped.
+        /// </summary>
+        public NodeGroup DuplicateGroup(NodeGroup source)
+        {
+            if (source == null) return null;
+
+            const double PASTE_OFFSET = 40.0;
+            Vector offset = new Vector(PASTE_OFFSET, PASTE_OFFSET);
+
+            List<Node> originals = source.ContainedNodes();
+            Dictionary<Guid, Port> portMap = new Dictionary<Guid, Port>();
+            List<Node> copies = new List<Node>();
+
+            foreach (Node original in originals)
+            {
+                JsonObject json = original.Save();
+                Node copy = CreateNodeByType(json["type"]?.GetValue<string>() ?? "Node");
+                copy.Load(json);
+
+                // re-key the clone so it does not collide with the node it came from
+                copy.guid = Guid.NewGuid();
+                for (int i = 0; i < copy.ports.Count && i < original.ports.Count; i++)
+                {
+                    portMap[original.ports[i].guid] = copy.ports[i];
+                    copy.ports[i].guid = Guid.NewGuid();
+                }
+
+                AddNode(copy, Canvas.GetLeft(original) + offset.X, Canvas.GetTop(original) + offset.Y);
+                copies.Add(copy);
+            }
+
+            foreach (Edge e in edges.ToList())
+            {
+                if (!portMap.TryGetValue(e.outputPort.guid, out Port from)) continue;
+                if (!portMap.TryGetValue(e.inputPort.guid,  out Port to))   continue;
+                CreateEdge(from, to);
+            }
+
+            NodeGroup copyGroup = new NodeGroup(this) { name = source.name };
+            copyGroup.Width  = source.Width;
+            copyGroup.Height = source.Height;
+            copyGroup.PlaceAt(new Point(source.Bounds.X + offset.X, source.Bounds.Y + offset.Y));
+
+            groups.Add(copyGroup);
+            Children.Add(copyGroup);
+            SetZIndex(copyGroup, GROUP_Z_INDEX);
+
+            ClearSelection();
+            foreach (Node copy in copies) SelectNode(copy, additive: true);
+
+            GraphChanged?.Invoke();
+            return copyGroup;
+        }
+
         public void AddNode(Node n, double posX = 0, double posY = 0)
         {
 
@@ -113,6 +227,55 @@ namespace XyGraph
             // subscribe to node notifications so graph can bubble changes
             n.NodeChanged -= OnNodeChanged;
             n.NodeChanged += OnNodeChanged;
+        }
+
+        // ── Selection ─────────────────────────────────────────────────────────
+
+        public List<Node> selectedNodes { get; internal set; } = new List<Node>();
+
+        public void ClearSelection()
+        {
+            foreach (Node n in selectedNodes) n.isSelected = false;
+            selectedNodes.Clear();
+        }
+
+        public void SelectNode(Node n, bool additive)
+        {
+            if (n == null) return;
+            if (!additive) ClearSelection();
+            if (selectedNodes.Contains(n)) return;
+            selectedNodes.Add(n);
+            n.isSelected = true;
+        }
+
+        public void DeselectNode(Node n)
+        {
+            if (n == null || !selectedNodes.Remove(n)) return;
+            n.isSelected = false;
+        }
+
+        public void ToggleNodeSelection(Node n)
+        {
+            if (n == null) return;
+            if (selectedNodes.Contains(n)) DeselectNode(n);
+            else SelectNode(n, additive: true);
+        }
+
+        /// <summary>Selects every node whose bounds intersect the given canvas-space rectangle.</summary>
+        public void SelectNodesInRect(Rect area, bool additive)
+        {
+            if (!additive) ClearSelection();
+
+            foreach (Node n in nodes)
+            {
+                double left = Canvas.GetLeft(n);
+                double top  = Canvas.GetTop(n);
+                if (double.IsNaN(left)) left = 0;
+                if (double.IsNaN(top))  top  = 0;
+
+                Rect bounds = new Rect(left, top, n.ActualWidth, n.ActualHeight);
+                if (area.IntersectsWith(bounds)) SelectNode(n, additive: true);
+            }
         }
 
         // bubbles node change events up as a graph-level notification
@@ -183,13 +346,19 @@ namespace XyGraph
             while (inputDefinitions.Count > 0)
                 inputDefinitions[0].Delete();
 
+            variableDefinitions.Clear();
+            variableValues.Clear();
+            selectedNodes.Clear();
+
+            foreach (NodeGroup g in groups.ToList()) Children.Remove(g);
+            groups.Clear();
+
             if (startItem != null)
                 startItem.IsEnabled = true;
-            if (endItem != null)
-                endItem.IsEnabled = true;
 
             startNode = null;
             endNode = null;
+            endNodes.Clear();
         }
 
         // save graph into a JsonObject
@@ -223,6 +392,11 @@ namespace XyGraph
             obj["inputValues"] = inputValuesObj;
 
 
+            JsonArray variablesArray = new JsonArray();
+            foreach (GraphVariable v in variableDefinitions)
+                variablesArray.Add(v.Save());
+            obj["variableDefinitions"] = variablesArray;
+
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
             {
@@ -238,6 +412,10 @@ namespace XyGraph
             }
             obj["edges"] = edgesArray;
 
+            JsonArray groupsArray = new JsonArray();
+            foreach (NodeGroup g in groups)
+                groupsArray.Add(g.Save());
+            obj["groups"] = groupsArray;
 
             return obj;
         }
@@ -318,6 +496,17 @@ namespace XyGraph
                 }
             }
 
+            // load variable definitions
+            JsonArray variablesArray2 = obj["variableDefinitions"] as JsonArray;
+            if (variablesArray2 != null)
+            {
+                foreach (JsonNode item in variablesArray2)
+                {
+                    if (item is JsonObject vo)
+                        variableDefinitions.Add(GraphVariable.Load(vo));
+                }
+            }
+
             JsonArray nodesArray = obj["nodes"] as JsonArray;
             if (nodesArray != null)
             {
@@ -348,14 +537,30 @@ namespace XyGraph
                 }
             }
 
+            if (obj["groups"] is JsonArray groupsArray)
+            {
+                foreach (JsonNode? item in groupsArray)
+                {
+                    if (item is not JsonObject groupObj) continue;
+
+                    NodeGroup g = new NodeGroup(this);
+                    g.Load(groupObj);
+                    groups.Add(g);
+                    Children.Add(g);
+                    SetZIndex(g, GROUP_Z_INDEX);
+                }
+            }
+
 
 
             // Set start and end nodes after loading
             startNode = nodes.FirstOrDefault(n => n is StartNode) as StartNode;
             if (startNode != null) startItem.IsEnabled = false;
 
-            endNode = nodes.FirstOrDefault(n => n is EndNode) as EndNode;
-            if (endNode != null) endItem.IsEnabled = false;
+            endNodes.Clear();
+            foreach (Node n in nodes)
+                if (n is EndNode loaded) endNodes.Add(loaded);
+            endNode = endNodes.FirstOrDefault();
 
             // notify listeners that the graph has finished loading
             GraphLoaded?.Invoke();
@@ -508,8 +713,8 @@ namespace XyGraph
         {
             if (startNode == null) return;
             InputValidation();
-            // clear transient runtime state on ports so each run starts fresh
             ClearRuntimeCache();
+            variableValues.Clear();   // fresh variable state each run
             status = GraphStatus.Running;
             startNode.Run();
         }

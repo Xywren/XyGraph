@@ -1,0 +1,56 @@
+<UserControl x:Class="XyGraph.GraphVariableCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" d:DesignHeight="80" d:DesignWidth="220">
+
+    <Border x:Name="Card" Background="#3A3A5C" CornerRadius="6" Padding="6" Margin="4">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Variable name -->
+            <TextBox x:Name="NameBox" Text="variableName" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                     BorderThickness="0" Background="Transparent" FontWeight="Bold" Foreground="White" Margin="0,0,0,2"/>
+
+            <!-- Type selector -->
+            <Grid Grid.Row="1" Grid.Column="0" Margin="0,0,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Type:" VerticalAlignment="Center" Foreground="DarkGray" FontSize="11" Grid.Column="0" />
+                <Border x:Name="TypeComboBorder" CornerRadius="6" Background="#FFFFFF" Padding="6,2,6,2" Margin="6,0,0,0" Grid.Column="1" HorizontalAlignment="Stretch">
+                    <ComboBox x:Name="TypeCombo" IsEditable="True" BorderThickness="0" Background="Transparent" Foreground="Black" HorizontalAlignment="Stretch" />
+                </Border>
+            </Grid>
+
+            <!-- Coloured type indicator -->
+            <Border x:Name="SocketOuter" Width="18" Height="18" Grid.Row="1" Grid.Column="1" CornerRadius="9"
+                    BorderBrush="LightGray" BorderThickness="2" Background="Transparent"
+                    HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,0,0">
+                <Border x:Name="SocketInner" Width="10" Height="10" CornerRadius="5" Background="White"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+
+            <!-- GET / SET drag hint row -->
+            <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                        Margin="0,4,0,0" HorizontalAlignment="Right">
+                <Border x:Name="GetChip" Background="#5555AA" CornerRadius="3" Padding="5,2" Margin="0,0,4,0" Cursor="Hand">
+                    <TextBlock Text="↑ GET" FontSize="9" Foreground="White" />
+                </Border>
+                <Border x:Name="SetChip" Background="#AA5555" CornerRadius="3" Padding="5,2" Cursor="Hand">
+                    <TextBlock Text="↓ SET" FontSize="9" Foreground="White" />
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

@@ -49,6 +49,7 @@ namespace XyGraph
 
         // Node status outline properties
         public Brush OutlineBrush = Brushes.Blue;
+        public Brush SelectionBrush = Brushes.DodgerBlue;
         public double OutlineThickness = 3.0;
         public Brush OutlineRunningBrush = Brushes.Blue;
         public Brush OutlineCompletedBrush = Brushes.Green;
@@ -381,9 +382,29 @@ namespace XyGraph
             }
         }
 
+        private bool _isSelected;
+        public bool isSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected == value) return;
+                _isSelected = value;
+                UpdateOutlineForState();
+            }
+        }
+
         // set colour of the node outline based on this nodes state
         private void UpdateOutlineForState()
         {
+            // selection outline takes precedence over the run-state outline
+            if (isSelected)
+            {
+                this.BorderBrush = SelectionBrush;
+                this.BorderThickness = new Thickness(OutlineThickness);
+                return;
+            }
+
             switch (state)
             {
                 case NodeState.Idle:
@@ -434,6 +455,11 @@ namespace XyGraph
 
 
         public void OnNodeMoved()
+        {
+            NodeChanged?.Invoke();
+        }
+
+        protected void NotifyChanged()
         {
             NodeChanged?.Invoke();
         }

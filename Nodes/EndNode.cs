@@ -87,8 +87,8 @@ namespace XyGraph
         public new void Delete()
         {
             base.Delete();
-            graph.endNode = null;
-            graph.endItem.IsEnabled = true;
+            graph.endNodes.Remove(this);
+            if (graph.endNode == this) graph.endNode = graph.endNodes.FirstOrDefault();
         }
 
 
