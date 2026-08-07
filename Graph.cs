@@ -257,6 +257,29 @@ namespace XyGraph
             n.isSelected = false;
         }
 
+        /// <summary>Deletes every selected node. Returns how many went.</summary>
+        public int DeleteSelectedNodes()
+        {
+            // Copy first — Node.Delete() removes itself from the selection as it goes
+            List<Node> doomed = selectedNodes.ToList();
+            foreach (Node n in doomed) n.Delete();
+            return doomed.Count;
+        }
+
+        /// <summary>
+        /// Forces a layout pass, then redraws the given nodes' edges. Edge.ReDraw() reads
+        /// socket positions through TranslatePoint, which reports where a socket was last
+        /// laid out — and Canvas.SetLeft/SetTop only invalidate arrange. Without the pass
+        /// the edges are drawn to the node's previous position, so a snap leaves them
+        /// offset from their ports by the snap distance.
+        /// </summary>
+        public void RedrawEdgesAfterMove(IEnumerable<Node> moved)
+        {
+            if (moved == null) return;
+            UpdateLayout();
+            foreach (Node n in moved) n?.RedrawEdges();
+        }
+
         public void ToggleNodeSelection(Node n)
         {
             if (n == null) return;

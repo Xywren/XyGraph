@@ -78,6 +78,11 @@ namespace XyGraph
             this.MouseRightButtonUp += GraphView_MouseRightButtonUp;
             graph.ContextMenuOpening += Graph_ContextMenuOpening;
 
+            // Keyboard shortcuts. Focusable so clicking the canvas takes focus away from any
+            // node's text box, which is what stops Delete deleting nodes mid-edit.
+            this.Focusable = true;
+            this.PreviewKeyDown += GraphView_PreviewKeyDown;
+
             // sidebar toggle button
             ToggleSidebarButton.Click += ToggleSidebarButton_Click;
             // add input button
@@ -679,9 +684,50 @@ namespace XyGraph
             translateTransform.Y = mousePos.Y - (contentBefore.Y * newScale);
         }
 
+        /// <summary>
+        /// Delete removes the current selection. Ignored while a text field has focus, since
+        /// PreviewKeyDown tunnels through this control on its way to the field.
+        /// </summary>
+        private void GraphView_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Delete) return;
+            if (IsEditingText(Keyboard.FocusedElement)) return;
+            if (graph.selectedNodes.Count == 0) return;
+
+            graph.DeleteSelectedNodes();
+            e.Handled = true;
+        }
+
+        private static bool IsEditingText(IInputElement focused)
+        {
+            return focused is TextBoxBase
+                || focused is PasswordBox
+                || (focused is ComboBox combo && combo.IsEditable);
+        }
+
+        /// <summary>Walks up from a clicked element looking for a field that owns the caret.</summary>
+        private static bool IsWithinTextInput(object source)
+        {
+            DependencyObject current = source as DependencyObject;
+            while (current != null)
+            {
+                if (current is TextBoxBase || current is PasswordBox || current is ComboBox)
+                    return true;
+
+                current = current is Visual
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            }
+            return false;
+        }
+
         private void GraphView_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (mouseState != MouseState.None) return;
+
+            // Take focus so the Delete shortcut works, but never off a field being edited —
+            // node pickers and group titles live inside the canvas and need to keep it
+            if (!IsWithinTextInput(e.OriginalSource)) Keyboard.Focus(this);
 
             // if a socket (or a child of a socket) was clicked, start creating an edge
             Socket clickedSocket = GetSocketFromSource(e.OriginalSource);
@@ -758,7 +804,9 @@ namespace XyGraph
 
                         draggedNodeRawPos = new Point(draggedNodeRawPos.X + delta.X, draggedNodeRawPos.Y + delta.Y);
                         MoveToSnapped(draggedNode, draggedNodeRawPos);
-                        (draggedNode as Node)?.RedrawEdges();
+
+                        List<Node> moved = new List<Node>();
+                        if (draggedNode is Node dragged) moved.Add(dragged);
 
                         foreach (Node other in dragGroupRawPositions.Keys.ToList())
                         {
@@ -766,8 +814,12 @@ namespace XyGraph
                             raw = new Point(raw.X + delta.X, raw.Y + delta.Y);
                             dragGroupRawPositions[other] = raw;
                             MoveToSnapped(other, raw);
-                            other.RedrawEdges();
+                            moved.Add(other);
                         }
+
+                        // Redraw once everything has moved, so the layout pass is paid for
+                        // once per frame rather than once per node
+                        graph.RedrawEdgesAfterMove(moved);
                     }
                     break;
                 case MouseState.BoxSelecting:
@@ -856,9 +908,14 @@ namespace XyGraph
                     break;
                 case MouseState.DraggingNode:
                     {
-
                         (draggedNode as Node)?.OnNodeMoved();
                         foreach (Node other in dragGroupRawPositions.Keys) other.OnNodeMoved();
+
+                        // The final snap happened after the last redraw, so settle the edges
+                        // against where the nodes actually came to rest
+                        List<Node> moved = new List<Node>(dragGroupRawPositions.Keys);
+                        if (draggedNode is Node dragged) moved.Add(dragged);
+                        graph.RedrawEdgesAfterMove(moved);
 
                         dragGroupRawPositions.Clear();
                         draggedNode = null;

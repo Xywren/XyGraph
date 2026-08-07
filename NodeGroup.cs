@@ -232,10 +232,9 @@ namespace XyGraph
 
             Offset(this, delta);
             foreach (UIElement member in dragMembers)
-            {
                 Offset(member, delta);
-                (member as Node)?.RedrawEdges();
-            }
+
+            RedrawMemberEdges();
             e.Handled = true;
         }
 
@@ -251,6 +250,9 @@ namespace XyGraph
                     SnapToGrid(member);
                     (member as Node)?.OnNodeMoved();
                 }
+
+                // Settle the edges against the snapped positions
+                RedrawMemberEdges();
             }
 
             isDraggingGroup = false;
@@ -258,6 +260,16 @@ namespace XyGraph
             dragMembers.Clear();
             ReleaseMouseCapture();
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// Redraws the edges of every node travelling with this group. Nodes inside nested
+        /// groups are already in dragMembers in their own right, since membership is worked
+        /// out from bounds.
+        /// </summary>
+        private void RedrawMemberEdges()
+        {
+            graph.RedrawEdgesAfterMove(dragMembers.OfType<Node>());
         }
 
         private static void Offset(UIElement element, Vector delta)
