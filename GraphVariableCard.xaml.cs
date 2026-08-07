@@ -43,6 +43,7 @@ namespace XyGraph
             if (variable != null) Variable = variable;
 
             InitializeComponent();
+            Card.Background = GraphVariable.ColourBrush;
             Loaded += Card_Loaded;
 
             NameBox.TextChanged += (s, e) =>

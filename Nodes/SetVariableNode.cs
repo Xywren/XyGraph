@@ -36,9 +36,17 @@ namespace XyGraph
             variableId = varId;
             title      = $"Set: {varName}";
 
-            // Colour the title bar with the variable's type colour
+            // The header keeps the type colour, like an input node does, while the body
+            // carries the shared variable blue — so the node says both "this is a
+            // variable" and "this is the type flowing through it".
             string titleHex = Common.HashColour((portType ?? typeof(object)).ToString());
             titleContainer.Background = (Brush)new BrushConverter().ConvertFromString(titleHex);
+
+            inputContainer.Background  = GraphVariable.ColourBrush;
+            outputContainer.Background = GraphVariable.ColourBrush;
+            mainContainer.Background   = GraphVariable.ColourBrush;
+            topContainer.Background    = GraphVariable.ColourBrush;
+            bottomContainer.Background = GraphVariable.ColourBrush;
 
             // Update the 'value' port that was auto-created from the [NodeInput] attribute
             valuePort = ports.FirstOrDefault(p => p.name == "value" && p.direction == PortDirection.Input);

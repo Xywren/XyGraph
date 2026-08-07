@@ -195,9 +195,32 @@ namespace XyGraph
             Child = grid;
 
             ContextMenu = new ContextMenu();
-            MenuItem disconnectItem = new MenuItem { Header = "Disconnect All" };
+            MenuItem disconnectItem = new MenuItem { Header = "Disconnect Port" };
             disconnectItem.Click += (object s, RoutedEventArgs e) => DisconnectAll();
             ContextMenu.Items.Add(disconnectItem);
+
+            // A port sits on top of its node, so WPF shows this menu instead of the node's.
+            // On nodes that are almost entirely port — input and variable Get nodes — that
+            // left no way to reach the node's own actions, so they are offered here too and
+            // follow the same selection scoping.
+            ContextMenu.Items.Add(new Separator());
+
+            MenuItem disconnectNodeItem = new MenuItem { Header = "Disconnect All" };
+            disconnectNodeItem.Click += (object s, RoutedEventArgs e) => parentContainer?.node?.DisconnectTargets();
+            ContextMenu.Items.Add(disconnectNodeItem);
+
+            MenuItem deleteNodeItem = new MenuItem { Header = "Delete Node" };
+            deleteNodeItem.Click += (object s, RoutedEventArgs e) => parentContainer?.node?.DeleteTargets();
+            ContextMenu.Items.Add(deleteNodeItem);
+
+            ContextMenu.Opened += (object s, RoutedEventArgs e) =>
+            {
+                int count = parentContainer?.node?.ActionTargets().Count ?? 1;
+                bool many = count > 1;
+
+                disconnectNodeItem.Header = many ? $"Disconnect All ({count} nodes)" : "Disconnect All";
+                deleteNodeItem.Header     = many ? $"Delete Selected ({count})"      : "Delete Node";
+            };
 
             // apply initial colour if provided
             if (color != null)

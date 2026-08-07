@@ -20,11 +20,7 @@ namespace XyGraph
 
         public GetVariableNode(Graph graph, Guid varId, string varName, Type portType) : base(graph)
         {
-            titleContainer.Visibility  = Visibility.Collapsed;
-            mainContainer.Background   = Brushes.Transparent;
-            inputContainer.Visibility  = Visibility.Collapsed;
-            topContainer.Visibility    = Visibility.Collapsed;
-            outputContainer.CornerRadius = new CornerRadius(6);
+            ApplyChrome();
 
             Initialize(varId, varName, portType);
         }
@@ -33,11 +29,21 @@ namespace XyGraph
 
         public GetVariableNode(Graph graph) : base(graph)
         {
-            titleContainer.Visibility  = Visibility.Collapsed;
-            mainContainer.Background   = Brushes.Transparent;
-            inputContainer.Visibility  = Visibility.Collapsed;
-            topContainer.Visibility    = Visibility.Collapsed;
+            ApplyChrome();
+        }
+
+        /// <summary>
+        /// A Get node is just a labelled socket — no title bar, no inputs — carrying the
+        /// shared variable colour so it reads differently from a graph input node.
+        /// </summary>
+        private void ApplyChrome()
+        {
+            titleContainer.Visibility    = Visibility.Collapsed;
+            mainContainer.Background     = Brushes.Transparent;
+            inputContainer.Visibility    = Visibility.Collapsed;
+            topContainer.Visibility      = Visibility.Collapsed;
             outputContainer.CornerRadius = new CornerRadius(6);
+            outputContainer.Background   = GraphVariable.ColourBrush;
         }
 
         public void Initialize(Guid varId, string varName, Type portType)

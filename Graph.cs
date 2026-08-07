@@ -17,7 +17,10 @@ namespace XyGraph
         public event Action GraphLoaded;
         public event Action? GraphChanged;
 
-        public double worldSize = 10000.0;
+        // Must match GraphView's WORLD_SIZE. Nodes serialise relative to worldSize/2 while
+        // groups serialise absolute, so a graph constructed without a GraphView has to agree
+        // on this value or its groups load displaced from the nodes they contain.
+        public double worldSize = 100000.0;
         private enum GraphState { None, Panning, DraggingNode, CreatingEdge }
 
         public Point rightClickPos;

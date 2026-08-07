@@ -14,12 +14,10 @@ namespace XyGraph
         public Node END;
 
         public Port port { get; private set; }
-        private Graph graph;
 
         public EndNode(Graph graph) : base(graph)
         {
             title = "END";
-            this.graph = graph;
 
 
 
@@ -84,7 +82,7 @@ namespace XyGraph
             }
         }
 
-        public new void Delete()
+        public override void Delete()
         {
             base.Delete();
             graph.endNodes.Remove(this);

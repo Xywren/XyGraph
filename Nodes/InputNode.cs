@@ -61,8 +61,7 @@ namespace XyGraph
 
             p.connectionType = ConnectionType.Multi;
 
-            outputContainer.Add(p);
-            ports.Add(p);
+            outputContainer.Add(p);   // NodeContainer.Add registers the port on the node
             outputPort = p;
         }
 

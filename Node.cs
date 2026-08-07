@@ -126,11 +126,41 @@ namespace XyGraph
             this.Padding = new Thickness(OutlineGap);
             Child = innerBorder;
 
-            // create context menu to delete this node
+            // Every node offers the same two actions, in the same order as the port menu
             ContextMenu = new ContextMenu();
+
+            // Grouping only makes sense for a multi-selection, and only when this node is
+            // part of it — otherwise the menu would group nodes the user never clicked.
+            MenuItem groupItem = new MenuItem { Header = "Group Selected" };
+            groupItem.Click += (s, e) => graph.AddNodeGroup();
+            ContextMenu.Items.Add(groupItem);
+
+            Separator groupSeparator = new Separator();
+            ContextMenu.Items.Add(groupSeparator);
+
+            MenuItem disconnectAllItem = new MenuItem { Header = "Disconnect All" };
+            disconnectAllItem.Click += (s, e) => this.DisconnectTargets();
+            ContextMenu.Items.Add(disconnectAllItem);
+
+            ContextMenu.Items.Add(new Separator());
+
             MenuItem deleteItem = new MenuItem { Header = "Delete Node" };
-            deleteItem.Click += (s, e) => this.Delete();
+            deleteItem.Click += (s, e) => this.DeleteTargets();
             ContextMenu.Items.Add(deleteItem);
+
+            // Retarget the labels each time the menu opens so it always states its scope
+            ContextMenu.Opened += (s, e) =>
+            {
+                int count = ActionTargets().Count;
+                bool many = count > 1;
+
+                groupItem.Header          = $"Group Selected ({count})";
+                groupItem.Visibility      = many ? Visibility.Visible : Visibility.Collapsed;
+                groupSeparator.Visibility = groupItem.Visibility;
+
+                disconnectAllItem.Header = many ? $"Disconnect All ({count} nodes)" : "Disconnect All";
+                deleteItem.Header        = many ? $"Delete Selected ({count})"      : "Delete Node";
+            };
 
             // add a textblock to show this node's title
             titleTextBlock = new TextBlock { Text = title, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
@@ -428,7 +458,39 @@ namespace XyGraph
         }
 
 
-        public void Delete()
+        /// <summary>Drops every edge attached to any of this node's ports, leaving the node.</summary>
+        public void DisconnectAll()
+        {
+            foreach (Port port in ports.ToList())
+                port.DisconnectAll();
+        }
+
+        /// <summary>
+        /// The nodes a context-menu action applies to: the whole selection when this node is
+        /// part of a multi-selection, otherwise just this node. Returns a copy, since the
+        /// callers mutate the selection while iterating.
+        /// </summary>
+        public List<Node> ActionTargets()
+        {
+            if (graph != null && graph.selectedNodes.Count > 1 && graph.selectedNodes.Contains(this))
+                return graph.selectedNodes.ToList();
+
+            return new List<Node> { this };
+        }
+
+        public void DisconnectTargets()
+        {
+            foreach (Node target in ActionTargets()) target.DisconnectAll();
+        }
+
+        public void DeleteTargets()
+        {
+            foreach (Node target in ActionTargets()) target.Delete();
+        }
+
+        // virtual so Start/End nodes get their bookkeeping run even when deleted through a
+        // Node-typed reference, such as the context menu handlers
+        public virtual void Delete()
         {
             List<Edge> edgesToRemove = graph.edges.Where(edge => this.ports.Contains(edge.outputPort) || this.ports.Contains(edge.inputPort)).ToList();
             foreach (Edge edge in edgesToRemove)
@@ -437,6 +499,7 @@ namespace XyGraph
             }
             graph.Children.Remove(this);
             graph.nodes.Remove(this);
+            graph.selectedNodes.Remove(this);   // else the selection keeps a dead reference
         }
 
         public List<Edge> GetAllEdges()

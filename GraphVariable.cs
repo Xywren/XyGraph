@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Text.Json.Nodes;
+using System.Windows.Media;
 
 namespace XyGraph
 {
@@ -10,6 +11,16 @@ namespace XyGraph
     /// </summary>
     public class GraphVariable
     {
+        /// <summary>
+        /// Shared blue used by the sidebar card and by the Get/Set nodes, so variables
+        /// read as variables at a glance rather than being coloured by their type like
+        /// graph inputs are.
+        /// </summary>
+        public const string COLOUR = "#3A3A5C";
+
+        public static Brush ColourBrush =>
+            (Brush)new BrushConverter().ConvertFromString(COLOUR);
+
         public Guid   Id      { get; set; } = Guid.NewGuid();
         public string Name    { get; set; } = "variable";
         public string TypeAqn { get; set; } = typeof(object).AssemblyQualifiedName;

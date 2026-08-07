@@ -14,12 +14,10 @@ namespace XyGraph
         public Node outputNode;
 
         public Port port { get; private set; }
-        private Graph graph;
 
         public StartNode(Graph graph) : base(graph)
         {
             title = "START";
-            this.graph = graph;
 
             // the port will be created by the base via attributes; find it and move it into the main container
 
@@ -85,7 +83,7 @@ namespace XyGraph
             }
         }
 
-        public new void Delete()
+        public override void Delete()
         {
             base.Delete();
             graph.startNode = null;
