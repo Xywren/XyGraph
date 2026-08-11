@@ -105,6 +105,13 @@ namespace XyGraph
         // Edit-time properties
         public List<Edge> edges = new List<Edge>();
 
+        // Inline literal: for a primitive input port (string/int/float/bool) the user can
+        // type a value directly on the node. It is used at run time only when the port has
+        // no incoming edge — a wire, variable or graph constant always takes precedence.
+        public object literalValue;
+        public bool hasLiteral;
+        private FrameworkElement literalEditor;
+
         // Transient runtime state (cleared at start of a graph run)
         // Stores the computed value for this output port during a run.
         public object runtimeValue;
@@ -169,6 +176,10 @@ namespace XyGraph
                 horiz.Children.Add(socket);
                 horiz.Children.Add(label);
 
+                // Primitive inputs get an inline editor so a literal can be typed on the node
+                literalEditor = BuildLiteralEditor();
+                if (literalEditor != null) horiz.Children.Add(literalEditor);
+
                 verticalStack.Children.Add(horiz);
                 verticalStack.Children.Add(typeLabel);
 
@@ -232,6 +243,85 @@ namespace XyGraph
 
 
         // =======================================================================
+        //                            Inline literals
+        // =======================================================================
+
+        /// <summary>True for the primitive types that can be typed directly on a node.</summary>
+        public static bool IsInlineEditable(Type t)
+        {
+            if (t == null) return false;
+            return t == typeof(string) || t == typeof(bool)
+                || t == typeof(int)   || t == typeof(long)  || t == typeof(short) || t == typeof(byte)
+                || t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+        }
+
+        private bool IsNumeric(Type t) =>
+            t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte)
+            || t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+
+        // Builds the on-node editor for a primitive input port: a checkbox for bool, a small
+        // text field otherwise. Returns null for non-primitive ports (no editor).
+        private FrameworkElement BuildLiteralEditor()
+        {
+            if (direction != PortDirection.Input || !IsInlineEditable(portType)) return null;
+
+            if (portType == typeof(bool))
+            {
+                CheckBox box = new CheckBox { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) };
+                box.Checked   += (s, e) => SetLiteralFromEditor(true);
+                box.Unchecked += (s, e) => SetLiteralFromEditor(false);
+                return box;
+            }
+
+            TextBox tb = new TextBox
+            {
+                Width             = IsNumeric(portType) ? 46 : 80,
+                Height            = 18,
+                FontSize          = 10,
+                Padding           = new Thickness(2, 0, 2, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Margin            = new Thickness(4, 0, 4, 0)
+            };
+            tb.TextChanged += (s, e) => SetLiteralFromEditor(tb.Text);
+            return tb;
+        }
+
+        // Parses the editor's raw value into the port's type and stores it as the literal.
+        private void SetLiteralFromEditor(object raw)
+        {
+            if (portType == typeof(bool))
+            {
+                literalValue = raw is bool b && b;
+                hasLiteral   = true;
+                return;
+            }
+
+            string text = raw as string ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { hasLiteral = false; literalValue = null; return; }
+
+            if (portType == typeof(string)) { literalValue = text; hasLiteral = true; return; }
+
+            try { literalValue = Convert.ChangeType(text, portType); hasLiteral = true; }
+            catch { hasLiteral = false; literalValue = null; }   // half-typed number — ignore until valid
+        }
+
+        // Reflects a loaded/!programmatic literal back into the editor UI.
+        private void PushLiteralToEditor()
+        {
+            if (literalEditor is CheckBox box) box.IsChecked = literalValue is bool b && b;
+            else if (literalEditor is TextBox tb) tb.Text = literalValue?.ToString() ?? string.Empty;
+        }
+
+        // The editor is only meaningful when nothing is wired in; a connected port is driven
+        // by its edge, so hide the field to make that obvious.
+        public void UpdateLiteralEditorVisibility()
+        {
+            if (literalEditor == null) return;
+            literalEditor.Visibility = edges.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        // =======================================================================
         //                            Serialization
         // =======================================================================
 
@@ -269,6 +359,10 @@ namespace XyGraph
                 obj["ownerIndex"] = ownerIndex;
             }
 
+            // persist an inline literal if one has been set
+            if (hasLiteral && literalValue != null)
+                obj["literal"] = literalValue.ToString();
+
             return obj;
         }
 
@@ -285,7 +379,15 @@ namespace XyGraph
             Port output = from.direction == PortDirection.Output ? from : to;
             Port input = from.direction == PortDirection.Input ? from : to;
 
-            return input.portType.IsAssignableFrom(output.portType);
+            // Normal case: the output's value already satisfies the input's type.
+            if (input.portType.IsAssignableFrom(output.portType)) return true;
+
+            // Cast connection: the input is a subtype of what the output produces
+            // (e.g. object → Bill). The wire carries the cast; if the runtime value
+            // isn't actually that type the assignment silently no-ops. Never applies to
+            // execution (Node) wires — those are exact.
+            if (typeof(Node).IsAssignableFrom(output.portType)) return false;
+            return output.portType.IsAssignableFrom(input.portType);
         }
 
         public static Port Load(JsonObject obj, Node node)
@@ -329,6 +431,16 @@ namespace XyGraph
             p.ownerMemberName = obj["ownerMember"]?.GetValue<string>();
             p.ownerIndex = obj["ownerIndex"]?.GetValue<int?>() ?? -1;
 
+            // restore an inline literal
+            string literalStr = obj["literal"]?.GetValue<string>();
+            if (literalStr != null)
+            {
+                p.SetLiteralFromEditor(p.portType == typeof(bool)
+                    ? (object)(literalStr.Equals("True", StringComparison.OrdinalIgnoreCase))
+                    : literalStr);
+                p.PushLiteralToEditor();
+            }
+
             return p;
         }
 
@@ -370,12 +482,14 @@ namespace XyGraph
             }
 
             edges.Add(connection);
+            UpdateLiteralEditorVisibility();
             OnEdgesChanged?.Invoke();
         }
 
         internal void ConnectionRemoved(Edge connection)
         {
             edges.Remove(connection);
+            UpdateLiteralEditorVisibility();
             OnEdgesChanged?.Invoke();
         }
     }

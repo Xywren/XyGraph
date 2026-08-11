@@ -941,17 +941,22 @@ namespace XyGraph
 
                 // look for an incoming edge on this port
                 Edge incoming = inputPort.edges.FirstOrDefault(e => e.inputPort == inputPort && e.outputPort != null);
+
+                // a wire wins; otherwise fall back to an inline literal typed on the node
+                object val;
                 if (incoming != null && incoming.outputPort != null)
+                    val = this.ResolvePortValue(incoming.outputPort);
+                else if (inputPort.hasLiteral)
+                    val = inputPort.literalValue;
+                else
+                    continue;
+
+                try
                 {
-                    // Get the PortValue from the upstream node, assign it to this member
-                    object val = this.ResolvePortValue(incoming.outputPort);
-                    try
-                    {
-                        if (member is FieldInfo field) field.SetValue(this, val);
-                        else if (member is PropertyInfo prop) prop.SetValue(this, val);
-                    }
-                    catch { }
+                    if (member is FieldInfo field) field.SetValue(this, val);
+                    else if (member is PropertyInfo prop) prop.SetValue(this, val);
                 }
+                catch { }
             }
 
             // Ports created at runtime (multi-ports, dynamically added pairs) have no owning
@@ -987,9 +992,10 @@ namespace XyGraph
                 Edge incoming = targetPort.edges.FirstOrDefault(e => e.inputPort == targetPort && e.outputPort != null);
                 if (incoming == null)
                 {
-                    targetPort.runtimeValue = null;
+                    // no wire — fall back to an inline literal typed on the node, if any
+                    targetPort.runtimeValue = targetPort.hasLiteral ? targetPort.literalValue : null;
                     targetPort.hasRuntimeValue = true;
-                    return null;
+                    return targetPort.runtimeValue;
                 }
                 fromPort = incoming.outputPort;
             }

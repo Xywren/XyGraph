@@ -14,6 +14,9 @@ namespace XyGraph
             get => Common.ColourOverride;
             set => Common.ColourOverride = value;
         }
+
+        /// <summary>Public entry to the shared colour algorithm (applies any override).</summary>
+        public static string HashColour(string input) => Common.HashColour(input);
     }
 
     internal class Common

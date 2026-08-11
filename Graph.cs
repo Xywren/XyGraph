@@ -94,6 +94,14 @@ namespace XyGraph
             groupItem.Click += (object sender, RoutedEventArgs e) => AddNodeGroup();
             createMenu.Items.Add(groupItem);
 
+            MenuItem eventEntryItem = new MenuItem { Header = "On Event (entry)" };
+            eventEntryItem.Click += (object sender, RoutedEventArgs e) => AddNode(new EventEntryNode(this), rightClickPos.X, rightClickPos.Y);
+            createMenu.Items.Add(eventEntryItem);
+
+            MenuItem emitEventItem = new MenuItem { Header = "Emit Event" };
+            emitEventItem.Click += (object sender, RoutedEventArgs e) => AddNode(new EmitEventNode(this), rightClickPos.X, rightClickPos.Y);
+            createMenu.Items.Add(emitEventItem);
+
             ContextMenu.Items.Add(createMenu);
             
         }
@@ -304,9 +312,15 @@ namespace XyGraph
             }
         }
 
+        // Suppresses GraphChanged while a graph is being deserialised. Loading adds dozens
+        // of nodes and edges, each of which would otherwise fire a change notification and
+        // trigger a full save-back — so loading a graph would immediately re-persist it.
+        private bool isLoading;
+
         // bubbles node change events up as a graph-level notification
         private void OnNodeChanged()
         {
+            if (isLoading) return;
             GraphChanged?.Invoke();
         }
 
@@ -451,6 +465,8 @@ namespace XyGraph
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));
 
+            isLoading = true;
+
             // restore graph GUID if present, otherwise generate a new one
             string guidStr = obj["guid"]?.GetValue<string>();
             if (!string.IsNullOrEmpty(guidStr))
@@ -587,6 +603,8 @@ namespace XyGraph
             foreach (Node n in nodes)
                 if (n is EndNode loaded) endNodes.Add(loaded);
             endNode = endNodes.FirstOrDefault();
+
+            isLoading = false;
 
             // notify listeners that the graph has finished loading
             GraphLoaded?.Invoke();

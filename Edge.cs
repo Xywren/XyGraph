@@ -119,9 +119,33 @@ namespace XyGraph
 
         private Brush GetStrokeBrush()
         {
-            if (inputPort  != null && inputPort.direction  == PortDirection.Input)  return inputPort.colour;
-            if (outputPort != null && outputPort.direction == PortDirection.Input)   return outputPort.colour;
-            return outputPort?.colour ?? Brushes.Black;
+            // resolve which end is the source (Output) and which is the sink (Input)
+            Port src = inputPort  != null && inputPort.direction  == PortDirection.Output ? inputPort
+                     : outputPort != null && outputPort.direction == PortDirection.Output ? outputPort : null;
+            Port dst = inputPort  != null && inputPort.direction  == PortDirection.Input  ? inputPort
+                     : outputPort != null && outputPort.direction == PortDirection.Input  ? outputPort : null;
+
+            Brush flat = dst?.colour ?? src?.colour ?? Brushes.Black;
+            if (src == null || dst == null) return flat;
+
+            // A cast connection (types differ, and it's not an execution wire) fades from the
+            // source type's colour to the target type's colour so the cast reads at a glance.
+            bool isCast = src.portType != dst.portType && !typeof(Node).IsAssignableFrom(dst.portType);
+            if (!isCast) return flat;
+
+            LinearGradientBrush g = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint   = new Point(1, 1)
+            };
+            g.GradientStops.Add(new GradientStop(BrushColour(src.colour), 0.0));
+            g.GradientStops.Add(new GradientStop(BrushColour(dst.colour), 1.0));
+            return g;
+        }
+
+        private static Color BrushColour(Brush b)
+        {
+            return b is SolidColorBrush s ? s.Color : Colors.Black;
         }
 
         // ── Interaction attachment ────────────────────────────────────────────

@@ -17,20 +17,23 @@ namespace XyGraph
     public class NodeGroup : Border
     {
         private const double TITLE_HEIGHT  = 24;
-        private const double GRIP_SIZE     = 14;
+        private const double RESIZE_MARGIN = 8;
         private const double PADDING       = 24;
         private const double MIN_WIDTH     = 120;
         private const double MIN_HEIGHT    = TITLE_HEIGHT + 40;
         private const double NODE_GRID     = 10.0;
 
+        [Flags]
+        private enum Edge { None = 0, Left = 1, Right = 2, Top = 4, Bottom = 8 }
+
         private readonly Graph    graph;
         private readonly TextBox  nameBox;
         private readonly Border   titleBar;
-        private readonly Rectangle resizeGrip;
 
         private Point  dragLastCanvasPos;
         private bool   isDraggingGroup;
         private bool   isResizing;
+        private Edge   activeEdge;
         private List<UIElement> dragMembers = new List<UIElement>();
 
         public string name
@@ -83,26 +86,45 @@ namespace XyGraph
             Grid.SetRow(titleBar, 0);
             layout.Children.Add(titleBar);
 
-            resizeGrip = new Rectangle
-            {
-                Width               = GRIP_SIZE,
-                Height              = GRIP_SIZE,
-                Fill                = Brushes.Gray,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment   = VerticalAlignment.Bottom,
-                Cursor              = Cursors.SizeNWSE
-            };
-            Grid.SetRow(resizeGrip, 1);
-            layout.Children.Add(resizeGrip);
+            // A transparent hit-frame around the whole perimeter. Each zone carries its own
+            // resize cursor, so hovering any edge or corner shows the right arrow with no
+            // dedicated grip. The interior is left empty so clicks there pass to the canvas.
+            Grid resizeFrame = new Grid { Background = null };
+            Grid.SetRowSpan(resizeFrame, 2);
+            AddResizeZone(resizeFrame, Edge.Top,                 HorizontalAlignment.Stretch, VerticalAlignment.Top,    Cursors.SizeNS,   new Thickness(RESIZE_MARGIN, 0, RESIZE_MARGIN, 0), RESIZE_MARGIN, double.NaN);
+            AddResizeZone(resizeFrame, Edge.Bottom,              HorizontalAlignment.Stretch, VerticalAlignment.Bottom, Cursors.SizeNS,   new Thickness(RESIZE_MARGIN, 0, RESIZE_MARGIN, 0), RESIZE_MARGIN, double.NaN);
+            AddResizeZone(resizeFrame, Edge.Left,                HorizontalAlignment.Left,    VerticalAlignment.Stretch, Cursors.SizeWE,  new Thickness(0, RESIZE_MARGIN, 0, RESIZE_MARGIN), double.NaN, RESIZE_MARGIN);
+            AddResizeZone(resizeFrame, Edge.Right,               HorizontalAlignment.Right,   VerticalAlignment.Stretch, Cursors.SizeWE,  new Thickness(0, RESIZE_MARGIN, 0, RESIZE_MARGIN), double.NaN, RESIZE_MARGIN);
+            AddResizeZone(resizeFrame, Edge.Top | Edge.Left,     HorizontalAlignment.Left,    VerticalAlignment.Top,    Cursors.SizeNWSE, new Thickness(0), RESIZE_MARGIN, RESIZE_MARGIN);
+            AddResizeZone(resizeFrame, Edge.Top | Edge.Right,    HorizontalAlignment.Right,   VerticalAlignment.Top,    Cursors.SizeNESW, new Thickness(0), RESIZE_MARGIN, RESIZE_MARGIN);
+            AddResizeZone(resizeFrame, Edge.Bottom | Edge.Left,  HorizontalAlignment.Left,    VerticalAlignment.Bottom, Cursors.SizeNESW, new Thickness(0), RESIZE_MARGIN, RESIZE_MARGIN);
+            AddResizeZone(resizeFrame, Edge.Bottom | Edge.Right, HorizontalAlignment.Right,   VerticalAlignment.Bottom, Cursors.SizeNWSE, new Thickness(0), RESIZE_MARGIN, RESIZE_MARGIN);
+            layout.Children.Add(resizeFrame);
 
             Child = layout;
 
             titleBar.PreviewMouseLeftButtonDown   += TitleBar_MouseDown;
-            resizeGrip.PreviewMouseLeftButtonDown += Grip_MouseDown;
             PreviewMouseMove                      += NodeGroup_MouseMove;
             PreviewMouseLeftButtonUp              += NodeGroup_MouseUp;
 
             BuildContextMenu();
+        }
+
+        private void AddResizeZone(Grid host, Edge edge, HorizontalAlignment h, VerticalAlignment v,
+                                   Cursor cursor, Thickness margin, double height, double width)
+        {
+            Rectangle zone = new Rectangle
+            {
+                Fill                = Brushes.Transparent,   // transparent but hit-testable
+                HorizontalAlignment = h,
+                VerticalAlignment   = v,
+                Cursor              = cursor,
+                Margin              = margin
+            };
+            if (!double.IsNaN(height)) zone.Height = height;
+            if (!double.IsNaN(width))  zone.Width  = width;
+            zone.PreviewMouseLeftButtonDown += (s, e) => Resize_MouseDown(edge, e);
+            host.Children.Add(zone);
         }
 
         private void BuildContextMenu()
@@ -207,9 +229,10 @@ namespace XyGraph
             e.Handled = true;
         }
 
-        private void Grip_MouseDown(object sender, MouseButtonEventArgs e)
+        private void Resize_MouseDown(Edge edge, MouseButtonEventArgs e)
         {
             isResizing        = true;
+            activeEdge        = edge;
             dragLastCanvasPos = e.GetPosition(graph);
             CaptureMouse();
             e.Handled = true;
@@ -225,8 +248,7 @@ namespace XyGraph
 
             if (isResizing)
             {
-                Width  = Math.Max(MIN_WIDTH,  Width  + delta.X);
-                Height = Math.Max(MIN_HEIGHT, Height + delta.Y);
+                ResizeBy(delta);
                 return;
             }
 
@@ -236,6 +258,38 @@ namespace XyGraph
 
             RedrawMemberEdges();
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// Resizes from whichever edges are active. Dragging a left/top edge moves the
+        /// group's origin as well as its size, so the opposite edge stays put — like a
+        /// normal window. Size is clamped to the minimum without dragging the origin past it.
+        /// </summary>
+        private void ResizeBy(Vector delta)
+        {
+            double left = Canvas.GetLeft(this); if (double.IsNaN(left)) left = 0;
+            double top  = Canvas.GetTop(this);  if (double.IsNaN(top))  top  = 0;
+            double w = Width, h = Height;
+
+            if (activeEdge.HasFlag(Edge.Right))  w = Math.Max(MIN_WIDTH, w + delta.X);
+            if (activeEdge.HasFlag(Edge.Bottom)) h = Math.Max(MIN_HEIGHT, h + delta.Y);
+            if (activeEdge.HasFlag(Edge.Left))
+            {
+                double nw = Math.Max(MIN_WIDTH, w - delta.X);
+                left += w - nw;   // move origin only by the amount width actually changed
+                w = nw;
+            }
+            if (activeEdge.HasFlag(Edge.Top))
+            {
+                double nh = Math.Max(MIN_HEIGHT, h - delta.Y);
+                top += h - nh;
+                h = nh;
+            }
+
+            Canvas.SetLeft(this, left);
+            Canvas.SetTop(this, top);
+            Width  = w;
+            Height = h;
         }
 
         private void NodeGroup_MouseUp(object sender, MouseButtonEventArgs e)
@@ -257,6 +311,7 @@ namespace XyGraph
 
             isDraggingGroup = false;
             isResizing      = false;
+            activeEdge      = Edge.None;
             dragMembers.Clear();
             ReleaseMouseCapture();
             e.Handled = true;
