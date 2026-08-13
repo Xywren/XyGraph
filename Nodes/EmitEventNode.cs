@@ -36,8 +36,13 @@ namespace XyGraph
             topContainer.Add(_channelBox);
         }
 
-        // Delivery is handled by the engine; node just routes execution onward for now.
-        public override void Run() { base.Run(); Completed(); }
+        // Resolve inputs, hand the event to the runtime, then route execution onward.
+        public override void Run()
+        {
+            base.Run();
+            EventBus.Deliver?.Invoke(target, channel, payload);
+            Completed();
+        }
 
         public override void Completed()
         {

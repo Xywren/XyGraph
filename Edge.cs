@@ -133,14 +133,22 @@ namespace XyGraph
             bool isCast = src.portType != dst.portType && !typeof(Node).IsAssignableFrom(dst.portType);
             if (!isCast) return flat;
 
+            // Anchor the gradient to the real socket positions (absolute mapping) so it always
+            // runs source → target, whatever direction the wire actually travels on screen.
             LinearGradientBrush g = new LinearGradientBrush
             {
-                StartPoint = new Point(0, 0),
-                EndPoint   = new Point(1, 1)
+                MappingMode = BrushMappingMode.Absolute,
+                StartPoint  = SocketCentre(src),
+                EndPoint    = SocketCentre(dst)
             };
             g.GradientStops.Add(new GradientStop(BrushColour(src.colour), 0.0));
             g.GradientStops.Add(new GradientStop(BrushColour(dst.colour), 1.0));
             return g;
+        }
+
+        private Point SocketCentre(Port p)
+        {
+            return p.socket.TranslatePoint(new Point(p.socket.ActualWidth / 2, p.socket.ActualHeight / 2), graph);
         }
 
         private static Color BrushColour(Brush b)

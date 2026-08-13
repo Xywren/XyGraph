@@ -90,9 +90,7 @@ namespace XyGraph
             commentItem.Click += (object sender, RoutedEventArgs e) => AddCommentNode();
             createMenu.Items.Add(commentItem);
 
-            MenuItem groupItem = new MenuItem { Header = "Group" };
-            groupItem.Click += (object sender, RoutedEventArgs e) => AddNodeGroup();
-            createMenu.Items.Add(groupItem);
+            // Groups are created by right-click-dragging a box over nodes, not from this menu.
 
             MenuItem eventEntryItem = new MenuItem { Header = "On Event (entry)" };
             eventEntryItem.Click += (object sender, RoutedEventArgs e) => AddNode(new EventEntryNode(this), rightClickPos.X, rightClickPos.Y);
@@ -747,9 +745,14 @@ namespace XyGraph
         {
             status = GraphStatus.Completed;
         }
+        /// <summary>Raised whenever a node enters the Error state, so a host can surface the
+        /// otherwise-silent stop (Error() neither logs nor throws).</summary>
+        public static event Action<Node> NodeErrored;
+
         public void OnError(Node node)
         {
             status = GraphStatus.Error;
+            NodeErrored?.Invoke(node);
         }
 
         // Start running the graph from the start node (if present)

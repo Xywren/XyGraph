@@ -51,8 +51,10 @@ namespace XyGraph
         public Brush OutlineBrush = Brushes.Blue;
         public Brush SelectionBrush = Brushes.DodgerBlue;
         public double OutlineThickness = 3.0;
-        public Brush OutlineRunningBrush = Brushes.Blue;
-        public Brush OutlineCompletedBrush = Brushes.Green;
+        // Active/waiting node → vivid green (same treatment as selection, different colour).
+        public Brush OutlineRunningBrush = new SolidColorBrush(Color.FromRgb(0x2E, 0xCC, 0x71));
+        // Completed → muted slate so it reads as "done", leaving green to mean "active now".
+        public Brush OutlineCompletedBrush = new SolidColorBrush(Color.FromRgb(0x5A, 0x6B, 0x7B));
         public Brush OutlineErrorBrush = Brushes.Red;
         public double OutlineGap = 2.0; // gap between outer border and inner content
 

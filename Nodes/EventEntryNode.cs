@@ -83,8 +83,28 @@ namespace XyGraph
             p.socket.BorderBrush = Brushes.Black;
         }
 
-        // Runtime activation (multi-root delivery + payload fan-out) is the engine's job.
-        public override void Run() { base.Run(); Completed(); }
+        /// <summary>
+        /// Fired by the runtime when a matching event is delivered. Publishes the payload on
+        /// the fused port so data targets can pull it, then runs every Node target — the port
+        /// drives execution and data at once, per what each edge lands on.
+        /// </summary>
+        public void Activate(object payload)
+        {
+            base.Run();
+            if (outputPort == null) return;
+
+            outputPort.runtimeValue    = payload;
+            outputPort.hasRuntimeValue = true;
+
+            foreach (Edge e in outputPort.edges.ToList())
+            {
+                Port target = e.inputPort;
+                if (target != null && typeof(Node).IsAssignableFrom(target.portType))
+                    target.parentContainer?.node?.Run();
+            }
+        }
+
+        public override void Run() { Activate(null); }
         public override void Completed() { base.Completed(); }
 
         public override JsonObject Save()

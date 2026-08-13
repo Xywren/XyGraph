@@ -66,8 +66,14 @@ namespace XyGraph
                 Foreground        = Brushes.Black,
                 FontWeight        = FontWeights.Bold,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin            = new Thickness(6, 0, 6, 0)
+                Margin            = new Thickness(6, 0, 6, 0),
+                // Not editable until double-clicked, so a single click on the title drags
+                // the group rather than dropping a caret into the name.
+                IsReadOnly        = true,
+                Focusable         = false
             };
+            nameBox.LostFocus += (s, e) => { nameBox.IsReadOnly = true; nameBox.Focusable = false; };
+            nameBox.KeyDown   += (s, e) => { if (e.Key == Key.Enter || e.Key == Key.Escape) Keyboard.ClearFocus(); };
 
             Rectangle interiorTint = new Rectangle
             {
@@ -106,6 +112,7 @@ namespace XyGraph
             titleBar.PreviewMouseLeftButtonDown   += TitleBar_MouseDown;
             PreviewMouseMove                      += NodeGroup_MouseMove;
             PreviewMouseLeftButtonUp              += NodeGroup_MouseUp;
+            PreviewMouseRightButtonUp             += NodeGroup_RightClick;
 
             BuildContextMenu();
         }
@@ -213,8 +220,30 @@ namespace XyGraph
 
         // ── Dragging & resizing ───────────────────────────────────────────────
 
+        // Opens the group's menu on right-click of any hittable part (title bar or resize
+        // frame). The interior is click-through, so this is the group's only right-click surface.
+        private void NodeGroup_RightClick(object sender, MouseButtonEventArgs e)
+        {
+            if (nameBox.IsKeyboardFocusWithin) return;   // leave the text field's own menu alone
+            if (ContextMenu == null) return;
+            ContextMenu.PlacementTarget = this;
+            ContextMenu.IsOpen = true;
+            e.Handled = true;
+        }
+
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
+            // Double-click the title to rename: enable editing, focus and select the text.
+            if (e.ClickCount == 2)
+            {
+                nameBox.IsReadOnly = false;
+                nameBox.Focusable  = true;
+                nameBox.Focus();
+                nameBox.SelectAll();
+                e.Handled = true;
+                return;
+            }
+
             // let the user click into the name field without starting a drag
             if (nameBox.IsKeyboardFocusWithin) return;
 
