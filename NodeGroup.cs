@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
@@ -35,6 +36,8 @@ namespace XyGraph
         private bool   isResizing;
         private Edge   activeEdge;
         private List<UIElement> dragMembers = new List<UIElement>();
+        // Edge handles enclosed by the group at drag start — they travel with it.
+        private List<(XyGraph.Edge edge, EdgeHandle handle)> dragHandles = new List<(XyGraph.Edge, EdgeHandle)>();
 
         public string name
         {
@@ -254,6 +257,13 @@ namespace XyGraph
             foreach (Node n in ContainedNodes())      dragMembers.Add(n);
             foreach (NodeGroup g in ContainedGroups()) dragMembers.Add(g);
 
+            // Enclosed edge handles move with the group too, so bent edges keep their shape.
+            Rect bounds = Bounds;
+            dragHandles = new List<(XyGraph.Edge, EdgeHandle)>();
+            foreach (XyGraph.Edge edge in graph.edges)
+                foreach (EdgeHandle h in edge.HandlesWithin(bounds))
+                    dragHandles.Add((edge, h));
+
             CaptureMouse();
             e.Handled = true;
         }
@@ -285,7 +295,12 @@ namespace XyGraph
             foreach (UIElement member in dragMembers)
                 Offset(member, delta);
 
+            foreach ((XyGraph.Edge edge, EdgeHandle handle) in dragHandles)
+                edge.OffsetHandle(handle, delta);
+
             RedrawMemberEdges();
+            foreach (XyGraph.Edge edge in dragHandles.Select(dh => dh.edge).Distinct())
+                edge.ReDraw();
             e.Handled = true;
         }
 
@@ -336,12 +351,15 @@ namespace XyGraph
 
                 // Settle the edges against the snapped positions
                 RedrawMemberEdges();
+                foreach (XyGraph.Edge edge in dragHandles.Select(dh => dh.edge).Distinct())
+                    edge.ReDraw();
             }
 
             isDraggingGroup = false;
             isResizing      = false;
             activeEdge      = Edge.None;
             dragMembers.Clear();
+            dragHandles.Clear();
             ReleaseMouseCapture();
             e.Handled = true;
         }

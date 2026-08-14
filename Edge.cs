@@ -437,6 +437,20 @@ namespace XyGraph
             h.anchorArrow.ContextMenu = menu;
         }
 
+        /// <summary>Handles whose anchor lies inside the given canvas-space rectangle.</summary>
+        public List<EdgeHandle> HandlesWithin(Rect area)
+        {
+            return handles.Where(h => area.Contains(h.Position)).ToList();
+        }
+
+        /// <summary>Shifts a handle (anchor and its control points travel with it) and repaints it.</summary>
+        public void OffsetHandle(EdgeHandle h, Vector delta)
+        {
+            if (h == null) return;
+            h.Position += delta;
+            PositionHandleVisuals(h);
+        }
+
         private void PositionHandleVisuals(EdgeHandle h)
         {
             // Arrow: rotated to face ControlOut direction, centroid at h.Position
@@ -532,8 +546,10 @@ namespace XyGraph
 
             Port fromPort = graph.GetPortById(fromId);
             Port toPort   = graph.GetPortById(toId);
+            // A missing endpoint means one end was an unknown node type that was skipped on
+            // load. Drop the edge rather than aborting — leave the gap for the user to fix.
             if (fromPort == null || toPort == null)
-                throw new Exception("Port could not be found. Make sure all nodes are loaded before loading edges.");
+                return null;
 
             Edge e = graph.CreateEdge(fromPort, toPort);
             if (e == null) return null;

@@ -978,7 +978,34 @@ namespace XyGraph
             if (area.Width < CLICK_TOLERANCE && area.Height < CLICK_TOLERANCE) return;
 
             graph.SelectNodesInRect(area, additive: (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
+
+            // Suppress the canvas's default right-click menu; offer selection actions instead.
             suppressNextContextMenu = true;
+            if (graph.selectedNodes.Count > 0) ShowSelectionMenu();
+        }
+
+        /// <summary>
+        /// Pops a menu at the cursor for the just-lassoed selection so grouping is one gesture.
+        /// </summary>
+        private void ShowSelectionMenu()
+        {
+            int count = graph.selectedNodes.Count;
+            ContextMenu menu = new ContextMenu { PlacementTarget = this, Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint };
+
+            MenuItem group = new MenuItem { Header = $"Group Selection ({count})" };
+            group.Click += (s, e) => graph.AddNodeGroup();
+
+            MenuItem disconnect = new MenuItem { Header = "Disconnect All" };
+            disconnect.Click += (s, e) => graph.DisconnectSelectedNodes();
+
+            MenuItem delete = new MenuItem { Header = "Delete Selection" };
+            delete.Click += (s, e) => graph.DeleteSelectedNodes();
+
+            menu.Items.Add(group);
+            menu.Items.Add(new Separator());
+            menu.Items.Add(disconnect);
+            menu.Items.Add(delete);
+            menu.IsOpen = true;
         }
 
         private void Graph_ContextMenuOpening(object sender, ContextMenuEventArgs e)

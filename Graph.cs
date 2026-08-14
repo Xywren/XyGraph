@@ -189,6 +189,7 @@ namespace XyGraph
             {
                 JsonObject json = original.Save();
                 Node copy = CreateNodeByType(json["type"]?.GetValue<string>() ?? "Node");
+                if (copy == null) continue;   // type resolves for a live node, but stay safe
                 copy.Load(json);
 
                 // re-key the clone so it does not collide with the node it came from
@@ -270,6 +271,14 @@ namespace XyGraph
             List<Node> doomed = selectedNodes.ToList();
             foreach (Node n in doomed) n.Delete();
             return doomed.Count;
+        }
+
+        /// <summary>Disconnects every edge on all selected nodes, leaving the nodes in place.</summary>
+        public int DisconnectSelectedNodes()
+        {
+            List<Node> targets = selectedNodes.ToList();
+            foreach (Node n in targets) n.DisconnectAll();
+            return targets.Count;
         }
 
         /// <summary>
@@ -558,6 +567,9 @@ namespace XyGraph
                     string typeStr = nodeObj["type"]?.GetValue<string>() ?? "Node";
 
                     Node n = CreateNodeByType(typeStr);
+                    // Unknown node type (a deleted/renamed node script) — skip it and its edges,
+                    // leaving a gap the user can repair, instead of failing the whole load.
+                    if (n == null) continue;
 
                     n.Load(nodeObj);
                     AddNode(n, Canvas.GetLeft(n), Canvas.GetTop(n));
@@ -664,8 +676,9 @@ namespace XyGraph
                 }
             }
 
-            // fallback to base Node
-            return new Node(this);
+            // The base Node is a real, usable type; anything else that can't be resolved is an
+            // unknown/removed script — return null so the caller can skip it.
+            return typeName == nameof(Node) ? new Node(this) : null;
         }
 
         // draws the grid background
