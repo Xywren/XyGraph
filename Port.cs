@@ -288,7 +288,7 @@ namespace XyGraph
         }
 
         // Parses the editor's raw value into the port's type and stores it as the literal.
-        private void SetLiteralFromEditor(object raw)
+        internal void SetLiteralFromEditor(object raw)
         {
             if (portType == typeof(bool))
             {
@@ -307,7 +307,7 @@ namespace XyGraph
         }
 
         // Reflects a loaded/!programmatic literal back into the editor UI.
-        private void PushLiteralToEditor()
+        internal void PushLiteralToEditor()
         {
             if (literalEditor is CheckBox box) box.IsChecked = literalValue is bool b && b;
             else if (literalEditor is TextBox tb) tb.Text = literalValue?.ToString() ?? string.Empty;

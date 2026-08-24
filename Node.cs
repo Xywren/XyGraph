@@ -584,290 +584,138 @@ namespace XyGraph
             Canvas.SetLeft(this, point.X);
             Canvas.SetTop(this, point.Y);
 
-            // remove any existing ports to avoid duplicates when re-loading
-            while (ports.Count > 0)
-                ports[0].Delete();
-
-
-
-
-        #region Unholy Reflection Port Loading Ritual 
-            // load ports that belong to this node
+            // Restore saved port state onto the constructor-created ports.
+            // The constructor already created ports from the current [NodeInput]/[NodeOutput]
+            // attributes, so the class definition is always the source of truth for what ports
+            // exist. We just patch GUIDs and literals from saved data so existing edges still
+            // connect. Saved ports that no longer match a class attribute are silently dropped;
+            // edges pointing at them will be skipped by Edge.Load (line 551).
             JsonArray portsArray = obj["ports"] as JsonArray;
             if (portsArray != null)
             {
-                // defer multi-ports that include owner metadata so we can resolve members and insert at the correct index
                 List<Port> deferredMultiPorts = new List<Port>();
 
-                // for each port (in JSON form) in this JSON array
                 foreach (JsonNode? item in portsArray)
                 {
                     JsonObject portObj = item as JsonObject;
                     if (portObj == null) continue;
 
-                    // create port via static loader
-                    Port p = Port.Load(portObj, this);
+                    string savedName = portObj["name"]?.GetValue<string>() ?? string.Empty;
+                    PortDirection savedDir = Enum.Parse<PortDirection>(portObj["direction"]?.GetValue<string>() ?? "Input");
 
-                    // If the saved port did not include explicit owner metadata (ownerMemberName)
-                    if (string.IsNullOrEmpty(p.ownerMemberName))
+                    // Multi-output ports ([NodeMultiOutput]) are dynamic and still need
+                    // the deferred creation logic — parse them into a temporary Port.
+                    string ownerMember = portObj["ownerMember"]?.GetValue<string>();
+                    int ownerIdx = portObj["ownerIndex"]?.GetValue<int?>() ?? -1;
+                    if (!string.IsNullOrEmpty(ownerMember) && ownerIdx >= 0 && savedDir == PortDirection.Output)
                     {
-                        BindingFlags resolveFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
-                        MemberInfo resolved = null;
-
-                        // Loop through all fields
-                        foreach (FieldInfo field in this.GetType().GetFields(resolveFlags))
-                        {
-                            //if not at NodeInput or NodeOutput attribute, skip
-                            NodeInputAttribute inAttr = field.GetCustomAttribute<NodeInputAttribute>();
-                            NodeOutputAttribute outAttr = field.GetCustomAttribute<NodeOutputAttribute>();
-                            if (inAttr == null && outAttr == null) continue;
-
-                            // get the expected name of this port based on attribute or field name
-                            string expectedName;
-                            if (inAttr != null) expectedName = inAttr.Name != null ? inAttr.Name : field.Name;
-                            else expectedName = outAttr.Name != null ? outAttr.Name : field.Name;
-
-                            // assume all NodeInputs are Input ports, NodeOutputs are Output ports
-                            PortDirection expectedDir = inAttr != null ? PortDirection.Input : PortDirection.Output;
-
-
-                            // If Attribute direction and name match the loaded port, we've
-                            // found the member that originally declared this port.
-                            if (expectedDir == p.direction && string.Equals(expectedName ?? string.Empty, p.name ?? string.Empty, StringComparison.Ordinal))
-                            {
-                                // remember which field created this port for later binding
-                                resolved = field;
-                                break;
-                            }
-                        }
-
-                        // if not found a field that created this port, search properties
-                        if (resolved == null)
-                        {
-                            // Loop through all properties
-                            foreach (PropertyInfo prop in this.GetType().GetProperties(resolveFlags))
-                            {
-                                //if not at NodeInput or NodeOutput attribute, skip
-                                NodeInputAttribute inAttr = prop.GetCustomAttribute<NodeInputAttribute>();
-                                NodeOutputAttribute outAttr = prop.GetCustomAttribute<NodeOutputAttribute>();
-                                if (inAttr == null && outAttr == null) continue;
-
-                                // get the expected name of this port based on attribute or field name
-                                string expectedName;
-                                if (inAttr != null) expectedName = inAttr.Name != null ? inAttr.Name : prop.Name;
-                                else expectedName = outAttr.Name != null ? outAttr.Name : prop.Name;
-
-                                // assume all NodeInputs are Input ports, NodeOutputs are Output ports
-                                PortDirection expectedDir = inAttr != null ? PortDirection.Input : PortDirection.Output;
-
-                                // If Attribute direction and name match the loaded port, we've
-                                // found the member that originally declared this port.
-                                if (expectedDir == p.direction && string.Equals(expectedName ?? string.Empty, p.name ?? string.Empty, StringComparison.Ordinal))
-                                {
-                                    // remember which field created this port for later binding
-                                    resolved = prop;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // If we found which member created this port, set it as this ports Owner
-                        if (resolved != null)
-                        {
-                            p.ownerMember = resolved;
-                        }
+                        Port temp = Port.Load(portObj, this);
+                        deferredMultiPorts.Add(temp);
+                        continue;
                     }
 
-                    // If the port contains owner metadata and an index, It is a [NodeMultiOutput] and not a [NodeInput] or [NodeOutput]
-                    // defer it for later - these ports are more complex to recreate and use different logic
-                    if (!string.IsNullOrEmpty(p.ownerMemberName) && p.ownerIndex >= 0 && p.direction == PortDirection.Output)
+                    // Find the matching constructor-created port by name + direction.
+                    Port match = ports.FirstOrDefault(p =>
+                        p.direction == savedDir &&
+                        string.Equals(p.name, savedName, StringComparison.Ordinal));
+
+                    if (match == null) continue;
+
+                    // Patch GUID so existing edges connect to this port.
+                    string savedId = portObj["id"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(savedId))
+                        match.guid = Guid.Parse(savedId);
+
+                    // Restore any saved literal value.
+                    string literalStr = portObj["literal"]?.GetValue<string>();
+                    if (literalStr != null)
                     {
-                        deferredMultiPorts.Add(p);
-                    }
-                    // if this is not a multi-output-port, add it now
-                    else
-                    {
-                        // add the ports to the appropriate nodeContainer
-                        if (p.direction == PortDirection.Input)
-                            inputContainer.Add(p);
-                        else
-                            outputContainer.Add(p);
+                        match.SetLiteralFromEditor(match.portType == typeof(bool)
+                            ? (object)(literalStr.Equals("True", StringComparison.OrdinalIgnoreCase))
+                            : literalStr);
+                        match.PushLiteralToEditor();
                     }
                 }
 
-                // Now process the more complicated MultiPorts that ew deferred for later
-
+            #region Multi-port restoration
                 Type nodeType = this.GetType();
                 BindingFlags flagsLocal = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
 
-                // for each deferred multi-port
                 foreach (Port mp in deferredMultiPorts)
                 {
-                    // find the member (field or property) on this node that owns the list backing these ports
-                    MemberInfo ownerMember = nodeType.GetField(mp.ownerMemberName, flagsLocal) as MemberInfo ?? nodeType.GetProperty(mp.ownerMemberName, flagsLocal) as MemberInfo;
-                    if (ownerMember != null)
+                    MemberInfo ownerMemberInfo = nodeType.GetField(mp.ownerMemberName, flagsLocal) as MemberInfo
+                                              ?? nodeType.GetProperty(mp.ownerMemberName, flagsLocal) as MemberInfo;
+                    if (ownerMemberInfo == null) continue;
+
+                    mp.ownerMember = ownerMemberInfo;
+
+                    Type listOwnerType = null;
+                    System.Collections.IList list = null;
+
+                    if (ownerMemberInfo is FieldInfo fi && typeof(System.Collections.IList).IsAssignableFrom(fi.FieldType))
                     {
-                        // tie the loaded metadata to the resolved member so later code can use it
-                        mp.ownerMember = ownerMember;
-
-                        if (ownerMember is FieldInfo fi && typeof(System.Collections.IList).IsAssignableFrom(fi.FieldType))
+                        listOwnerType = fi.FieldType;
+                        list = fi.GetValue(this) as System.Collections.IList;
+                        if (list == null)
                         {
-                            // attempts to parse the runtime object as a List<T> for the
-                            // multi-output owner member (e.g. List<Node>)
-                            object listObj = fi.GetValue(this);
-                            System.Collections.IList list = listObj as System.Collections.IList;
-
-
-                            // Ensure the backing list is instantiated, if not it will instantiate it for you
-                            // TLDR: magically turns "[NodeMultiOutput] public List<int> myOutputs;" into "[NodeMultiOutput] public List<int> myOutputs = new List<int>();" if you didnt initialize it yourself
-                            if (list == null)
-                            {
-                                Type elemType = fi.FieldType.IsGenericType ? fi.FieldType.GetGenericArguments()[0] : typeof(object);
-                                Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(new Type[] { elemType });
-                                list = (System.Collections.IList)Activator.CreateInstance(listType);
-                                fi.SetValue(this, list);
-                            }
-
-                            // if this Port's index is 5, ensure the list has at least 6 slots so index [5] is valid
-                            while (list.Count <= mp.ownerIndex) list.Add(null);
-
-                            // Determine type T in List<T>
-                            Type elemTypeForPort = fi.FieldType.IsGenericType ? fi.FieldType.GetGenericArguments()[0] : typeof(object);
-
-                            // load [NodeMultiOutput] attribute metadata
-                            NodeMultiOutputAttribute multiAttr = fi.GetCustomAttribute<NodeMultiOutputAttribute>();
-                            int socketSize = multiAttr?.SocketSize ?? 10;
-                            // derive a color for multi-ports if not specified on the attribute
-                            string derived = DerivePortColour(elemTypeForPort);
-                            BrushConverter localBrushConverter = new BrushConverter();
-                            Brush colorBrush = (Brush)localBrushConverter.ConvertFromString(multiAttr?.Color ?? derived);
-                            bool drawOuter = multiAttr?.DrawOuterRing ?? true;
-
-                            // create a MultiPort
-                            MultiPort newMp = new MultiPort(mp.name, PortDirection.Output, elemTypeForPort, socketSize: socketSize, color: colorBrush, drawSocketOuterRing: drawOuter);
-
-                            // carry over important serialized state (ids, connection mode, owner metadata)
-                            newMp.guid = mp.guid;
-                            newMp.connectionType = mp.connectionType;
-                            newMp.ownerIndex = mp.ownerIndex;
-                            newMp.ownerMemberName = mp.ownerMemberName;
-                            newMp.ownerMember = ownerMember;
-
-                            // try to preserve the saved colour if present
-                            try { newMp.colour = mp.colour; } catch { }
-
-                            // find the add-button for this [NodeMultiOutput]
-                            int addBtnIndex = -1;
-                            if (outputContainer.Child is StackPanel sp)
-                            {
-                                for (int i = 0; i < sp.Children.Count; i++)
-                                {
-                                    if (sp.Children[i] is Button b && (b.Tag as string) == mp.ownerMemberName)
-                                    {
-                                        addBtnIndex = i;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Add these MultiPorts underneath their "Add Output" button.
-                            if (addBtnIndex >= 0)
-                            {
-                                int insertAt = addBtnIndex + 1 + Math.Max(0, mp.ownerIndex);
-                                outputContainer.InsertAt(insertAt, newMp);
-                            }
-                            // if we cant find the button, just add them to the end of the container
-                            else
-                            {
-                                outputContainer.Add(newMp);
-                            }
-                        }
-
-                        // same code for properties
-                        else if (ownerMember is PropertyInfo pi && typeof(System.Collections.IList).IsAssignableFrom(pi.PropertyType))
-                        {
-                            // attempts to parse the runtime object as a List<T> for the
-                            // multi-output owner member (e.g. List<Node>)
-                            object listObj = pi.GetValue(this);
-                            System.Collections.IList list = listObj as System.Collections.IList;
-
-
-                            // Ensure the backing list is instantiated, if not it will instantiate it for you
-                            // TLDR: magically turns "[NodeMultiOutput] public List<int> myOutputs;" into "[NodeMultiOutput] public List<int> myOutputs = new List<int>();" if you didnt initialize it yourself
-                            if (list == null)
-                            {
-                                Type elemType = pi.PropertyType.IsGenericType ? pi.PropertyType.GetGenericArguments()[0] : typeof(object);
-                                Type listType = typeof(System.Collections.Generic.List<>).MakeGenericType(new Type[] { elemType });
-                                list = (System.Collections.IList)Activator.CreateInstance(listType);
-                                pi.SetValue(this, list);
-                            }
-
-                            // if this Port's index is 5, ensure the list has at least 6 slots so index [5] is valid
-                            while (list.Count <= mp.ownerIndex) list.Add(null);
-
-                            // Determine type T in List<T>
-                            Type elemTypeForPort = pi.PropertyType.IsGenericType ? pi.PropertyType.GetGenericArguments()[0] : typeof(object);
-
-                            // load [NodeMultiOutput] attribute metadata
-                            NodeMultiOutputAttribute multiAttr = pi.GetCustomAttribute<NodeMultiOutputAttribute>();
-                            int socketSize = multiAttr?.SocketSize ?? 10;
-                            // derive a color for multi-ports if not specified on the attribute (match field-backed behavior)
-                            string derivedProp = DerivePortColour(elemTypeForPort);
-                            string finalPropColor = multiAttr?.Color ?? derivedProp;
-                            Brush colorBrush;
-                            try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(finalPropColor)); } catch { colorBrush = Brushes.Black; }
-                            bool drawOuter = multiAttr?.DrawOuterRing ?? true;
-
-                            // create a MultiPort
-                            MultiPort newMp = new MultiPort(mp.name, PortDirection.Output, elemTypeForPort, socketSize: socketSize, color: colorBrush, drawSocketOuterRing: drawOuter);
-
-                            // carry over important serialized state (ids, connection mode, owner metadata)
-                            newMp.guid = mp.guid;
-                            newMp.connectionType = mp.connectionType;
-                            newMp.ownerIndex = mp.ownerIndex;
-                            newMp.ownerMemberName = mp.ownerMemberName;
-                            newMp.ownerMember = ownerMember;
-                            try { newMp.colour = mp.colour; } catch { }
-
-                            int addBtnIndex = -1;
-                            if (outputContainer.Child is StackPanel sp2)
-                            {
-                                for (int i = 0; i < sp2.Children.Count; i++)
-                                {
-                                    if (sp2.Children[i] is Button b && (b.Tag as string) == mp.ownerMemberName)
-                                    {
-                                        addBtnIndex = i;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Add these MultiPorts underneath their "Add Output" button.
-                            if (addBtnIndex >= 0)
-                            {
-                                int insertAt = addBtnIndex + 1 + Math.Max(0, mp.ownerIndex);
-                                outputContainer.InsertAt(insertAt, newMp);
-                            }
-                            // if we cant find the button, just add them to the end of the container
-                            else
-                            {
-                                outputContainer.Add(newMp);
-                            }
-                        }
-                        else
-                        {
-                            // couldn't find a list-backed member for this saved multi-port; fail loudly
-                            throw new InvalidOperationException($"Saved multi-port refers to member '{mp.ownerMemberName}' but that member is not a List on type '{this.GetType().FullName}'.");
+                            Type elemType = fi.FieldType.IsGenericType ? fi.FieldType.GetGenericArguments()[0] : typeof(object);
+                            list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elemType));
+                            fi.SetValue(this, list);
                         }
                     }
+                    else if (ownerMemberInfo is PropertyInfo pi && typeof(System.Collections.IList).IsAssignableFrom(pi.PropertyType))
+                    {
+                        listOwnerType = pi.PropertyType;
+                        list = pi.GetValue(this) as System.Collections.IList;
+                        if (list == null)
+                        {
+                            Type elemType = pi.PropertyType.IsGenericType ? pi.PropertyType.GetGenericArguments()[0] : typeof(object);
+                            list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elemType));
+                            pi.SetValue(this, list);
+                        }
+                    }
+                    else continue;
+
+                    while (list.Count <= mp.ownerIndex) list.Add(null);
+
+                    Type elemTypeForPort = listOwnerType.IsGenericType ? listOwnerType.GetGenericArguments()[0] : typeof(object);
+                    NodeMultiOutputAttribute multiAttr = ownerMemberInfo is FieldInfo f2
+                        ? f2.GetCustomAttribute<NodeMultiOutputAttribute>()
+                        : ((PropertyInfo)ownerMemberInfo).GetCustomAttribute<NodeMultiOutputAttribute>();
+
+                    int socketSize = multiAttr?.SocketSize ?? 10;
+                    string derivedColor = DerivePortColour(elemTypeForPort);
+                    Brush colorBrush;
+                    try { colorBrush = (Brush)(new BrushConverter().ConvertFromString(multiAttr?.Color ?? derivedColor)); }
+                    catch { colorBrush = Brushes.Black; }
+                    bool drawOuter = multiAttr?.DrawOuterRing ?? true;
+
+                    MultiPort newMp = new MultiPort(mp.name, PortDirection.Output, elemTypeForPort,
+                        socketSize: socketSize, color: colorBrush, drawSocketOuterRing: drawOuter);
+                    newMp.guid = mp.guid;
+                    newMp.connectionType = mp.connectionType;
+                    newMp.ownerIndex = mp.ownerIndex;
+                    newMp.ownerMemberName = mp.ownerMemberName;
+                    newMp.ownerMember = ownerMemberInfo;
+                    try { newMp.colour = mp.colour; } catch { }
+
+                    int addBtnIndex = -1;
+                    if (outputContainer.Child is StackPanel sp)
+                    {
+                        for (int i = 0; i < sp.Children.Count; i++)
+                        {
+                            if (sp.Children[i] is Button b && (b.Tag as string) == mp.ownerMemberName)
+                            { addBtnIndex = i; break; }
+                        }
+                    }
+
+                    if (addBtnIndex >= 0)
+                        outputContainer.InsertAt(addBtnIndex + 1 + Math.Max(0, mp.ownerIndex), newMp);
                     else
-                    {
-                        // owner member name didn't resolve; fail loudly so caller can detect bad/legacy save data
-                        throw new InvalidOperationException($"Could not resolve owner member '{mp.ownerMemberName}' for port '{mp.name}' on node type '{this.GetType().FullName}'.");
-                    }
+                        outputContainer.Add(newMp);
                 }
+            #endregion
             }
-        #endregion
 
             // restore runtime state if present
             string stateStr = obj["state"]?.GetValue<string>();
