@@ -135,6 +135,8 @@ namespace XyGraph
             {
                 Initialize(variableId, varName, resolved);
             }
+
+            RestorePortGuid(obj, outputPort, PortDirection.Output);
         }
     }
 }

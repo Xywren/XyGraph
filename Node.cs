@@ -570,6 +570,28 @@ namespace XyGraph
             return obj;
         }
 
+        /// <summary>
+        /// Restores a dynamically created port's saved identity. Load matches ports by name
+        /// against the ones the constructor made from attributes, so a port built at runtime
+        /// never matches and keeps its fresh guid — which silently drops every edge to it.
+        /// Subclasses that build their own port must call this once they have rebuilt it.
+        /// </summary>
+        protected void RestorePortGuid(JsonObject obj, Port port, PortDirection direction)
+        {
+            if (obj == null || port == null) return;
+            if (obj["ports"] is not JsonArray savedPorts) return;
+
+            foreach (JsonNode? item in savedPorts)
+            {
+                if (item is not JsonObject portObj) continue;
+                if (portObj["direction"]?.GetValue<string>() != direction.ToString()) continue;
+
+                string savedId = portObj["id"]?.GetValue<string>();
+                if (!string.IsNullOrEmpty(savedId)) port.guid = Guid.Parse(savedId);
+                return;
+            }
+        }
+
         public virtual void Load(JsonObject obj)
         {
             if (obj == null) throw new ArgumentNullException(nameof(obj));

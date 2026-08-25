@@ -161,24 +161,6 @@ namespace XyGraph
             // collect output ports created by base.Load
             List<Port> outputPorts = ports.Where(p => p.direction == PortDirection.Output).ToList();
 
-            // Find saved port GUID so edges reconnect to the same port identity.
-            Guid? savedPortGuid = null;
-            if (obj["ports"] is JsonArray portsArr)
-            {
-                foreach (JsonNode? pn in portsArr)
-                {
-                    if (pn is not JsonObject po) continue;
-                    string dir = po["direction"]?.GetValue<string>() ?? "";
-                    if (dir == "Output")
-                    {
-                        string pid = po["id"]?.GetValue<string>();
-                        if (!string.IsNullOrEmpty(pid) && Guid.TryParse(pid, out Guid g))
-                            savedPortGuid = g;
-                        break;
-                    }
-                }
-            }
-
             if (outputPorts.Count > 0)
             {
                 outputPort = outputPorts[0];
@@ -209,8 +191,7 @@ namespace XyGraph
                 Initialize(inputId, nameForPort, resolvedType);
             }
 
-            if (savedPortGuid.HasValue && outputPort != null)
-                outputPort.guid = savedPortGuid.Value;
+            RestorePortGuid(obj, outputPort, PortDirection.Output);
         }
     }
 }

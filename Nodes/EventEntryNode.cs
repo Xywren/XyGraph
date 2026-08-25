@@ -137,6 +137,8 @@ namespace XyGraph
             {
                 BuildPort();
             }
+
+            RestorePortGuid(obj, outputPort, PortDirection.Output);
         }
     }
 }
