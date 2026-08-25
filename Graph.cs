@@ -444,6 +444,16 @@ namespace XyGraph
                 variablesArray.Add(v.Save());
             obj["variableDefinitions"] = variablesArray;
 
+            // A waiting process is only resumed from what it saved, so its variables have to
+            // travel with it — as identities, so they reload current data rather than a snapshot.
+            JsonObject variableValuesObj = new JsonObject();
+            foreach (KeyValuePair<Guid, object> variable in variableValues)
+            {
+                if (variable.Value == null) continue;
+                variableValuesObj[variable.Key.ToString()] = RecordReference.Write(variable.Value);
+            }
+            obj["variableValues"] = variableValuesObj;
+
             JsonArray nodesArray = new JsonArray();
             foreach (Node n in nodes)
             {
@@ -553,6 +563,18 @@ namespace XyGraph
                 {
                     if (item is JsonObject vo)
                         variableDefinitions.Add(GraphVariable.Load(vo));
+                }
+            }
+
+            // restore variable values (definitions first — they say what type each one holds)
+            if (obj["variableValues"] is JsonObject storedVariables)
+            {
+                foreach (KeyValuePair<string, JsonNode> stored in storedVariables)
+                {
+                    if (!Guid.TryParse(stored.Key, out Guid variableId)) continue;
+
+                    GraphVariable definition = variableDefinitions.FirstOrDefault(v => v.Id == variableId);
+                    variableValues[variableId] = RecordReference.Read(stored.Value, definition?.ResolvedType);
                 }
             }
 

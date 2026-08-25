@@ -24,8 +24,7 @@ namespace XyGraph
             obj["name"] = name ?? string.Empty;
             if (Value != null)
             {
-                JsonNode node = JsonSerializer.SerializeToNode(Value);
-                obj["value"] = node;
+                obj["value"] = RecordReference.Write(Value);
             }
             return obj;
         }
@@ -49,16 +48,10 @@ namespace XyGraph
                 return;
             }
 
-            if (expectedType != null)
-            {
-                string json = node.ToJsonString();
-                object deserialized = JsonSerializer.Deserialize(json, expectedType);
-                Value = deserialized;
-                return;
-            }
+            object loaded = RecordReference.Read(node, expectedType);
 
             // fallback: keep as JsonNode if no expected CLR type provided
-            Value = node;
+            Value = loaded ?? (expectedType == null ? node : null);
         }
     }
 }
