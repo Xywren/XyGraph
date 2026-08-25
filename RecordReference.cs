@@ -37,6 +37,20 @@ namespace XyGraph
             return JsonSerializer.SerializeToNode(value);
         }
 
+        /// <summary>
+        /// Returns the record as the database has it now. A port carries a reference to a row,
+        /// not a copy of it, so a node reading one days after it was produced still sees current
+        /// data. Anything that is not a saved record is passed straight back.
+        /// </summary>
+        public static object Reload(object value)
+        {
+            if (value is not IGraphRecord record) return value;
+            if (record.RecordId <= 0) return value;
+
+            try { return Activator.CreateInstance(value.GetType(), record.RecordId) ?? value; }
+            catch { return value; }
+        }
+
         public static object Read(JsonNode node, Type expectedType)
         {
             if (node == null) return null;

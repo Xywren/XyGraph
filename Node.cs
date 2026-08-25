@@ -823,6 +823,11 @@ namespace XyGraph
                 else
                     continue;
 
+                // A record arrives as a reference to a row, so read the row rather than trust
+                // whatever the value looked like when it was produced — which for a process
+                // that has been waiting may be days out of date.
+                val = RecordReference.Reload(val);
+
                 try
                 {
                     if (member is FieldInfo field) field.SetValue(this, val);
@@ -840,7 +845,7 @@ namespace XyGraph
                 if (port.ownerMember != null) continue;
                 if (port.hasRuntimeValue) continue;
 
-                port.runtimeValue = ResolvePortValue(port);
+                port.runtimeValue = RecordReference.Reload(ResolvePortValue(port));
                 port.hasRuntimeValue = true;
             }
         }
