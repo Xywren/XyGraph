@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using XyGraph;
@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Kraken.GraphSystem;
+namespace XyGraph;
 
 
 

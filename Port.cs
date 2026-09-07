@@ -383,7 +383,7 @@ namespace XyGraph
             if (input.portType.IsAssignableFrom(output.portType)) return true;
 
             // Cast connection: the input is a subtype of what the output produces
-            // (e.g. object → Bill). The wire carries the cast; if the runtime value
+            // (e.g. object to a concrete type). The wire carries the cast; if the runtime value
             // isn't actually that type the assignment silently no-ops. Never applies to
             // execution (Node) wires — those are exact.
             if (typeof(Node).IsAssignableFrom(output.portType)) return false;

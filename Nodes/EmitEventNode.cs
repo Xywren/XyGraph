@@ -7,9 +7,9 @@ using System.Windows.Media;
 namespace XyGraph
 {
     /// <summary>
-    /// Fires a named event at one target instance, then continues. The target is a domain id
-    /// (e.g. an account or case id); the engine resolves it to the live graph instance via the
-    /// Kraken object and delivers the event to its matching EventEntry. Not a broadcast.
+    /// Fires a named event at one target instance, then continues. The target is an id belonging
+    /// to the host application; the engine resolves it to the live graph instance and delivers the
+    /// event to its matching EventEntry. Not a broadcast.
     /// </summary>
     public class EmitEventNode : Node
     {

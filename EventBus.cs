@@ -4,8 +4,9 @@ namespace XyGraph
 {
     /// <summary>
     /// Seam between an EmitEvent node (which lives in the engine) and the process runtime
-    /// (which lives in Kraken and knows how to resolve a Process handle to a live instance and
-    /// deliver to it). Kraken wires <see cref="Deliver"/> at load; the node just calls it.
+    /// (which lives in the host application and knows how to resolve a Process handle to a live
+    /// instance and deliver to it). The host wires <see cref="Deliver"/> at load; the node just
+    /// calls it.
     /// </summary>
     public static class EventBus
     {

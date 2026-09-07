@@ -34,8 +34,8 @@ namespace XyGraph
         /// <summary>
         /// Resolves a type from an assembly-qualified name, full name, or simple name.
         /// Type.GetType alone only searches the calling assembly and the core library, so
-        /// types defined by the host application (Kraken's models, for example) fail to
-        /// resolve from inside XyGraph — hence the sweep over loaded assemblies.
+        /// types defined by the host application fail to resolve from inside XyGraph — hence
+        /// the sweep over loaded assemblies.
         /// </summary>
         public static Type ResolveType(string nameOrAqn)
         {
